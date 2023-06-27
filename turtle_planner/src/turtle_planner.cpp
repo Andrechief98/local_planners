@@ -1,4 +1,4 @@
-#include "local_planner.h"
+#include "turtle_planner.h"
 #include <pluginlib/class_list_macros.h>
 #include <nav_msgs/Odometry.h>
 #include <vector>
@@ -8,7 +8,7 @@
 
 
 
-PLUGINLIB_EXPORT_CLASS(local_planner::LocalPlanner, nav_core::BaseLocalPlanner)
+PLUGINLIB_EXPORT_CLASS(turtle_planner::TurtlePlanner, nav_core::BaseLocalPlanner)
 
 void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
 {
@@ -102,19 +102,19 @@ std::vector<double> computeVelocityFromForce(std::vector<double> Ftot, std::vect
 }
 
 
-namespace local_planner{
+namespace turtle_planner{
 
-    LocalPlanner::LocalPlanner() : costmap_ros_(NULL), tf_(NULL), initialized_(false){}
+    TurtlePlanner::TurtlePlanner() : costmap_ros_(NULL), tf_(NULL), initialized_(false){}
 
-    LocalPlanner::LocalPlanner(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros) : costmap_ros_(NULL), tf_(NULL), initialized_(false)
+    TurtlePlanner::TurtlePlanner(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros) : costmap_ros_(NULL), tf_(NULL), initialized_(false)
     {
         initialize(name, tf, costmap_ros);
     }
 
-    LocalPlanner::~LocalPlanner() {}
+    TurtlePlanner::~TurtlePlanner() {}
 
     // Take note that tf::TransformListener* has been changed to tf2_ros::Buffer* in ROS Noetic
-    void LocalPlanner::initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros)
+    void TurtlePlanner::initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros)
     {
         if(!initialized_)
         {   
@@ -130,7 +130,7 @@ namespace local_planner{
         ROS_INFO("inizializzazione local planner avvenuta");
     }
 
-    bool LocalPlanner::setPlan(const std::vector<geometry_msgs::PoseStamped>& orig_global_plan)
+    bool TurtlePlanner::setPlan(const std::vector<geometry_msgs::PoseStamped>& orig_global_plan)
     {
         if(!initialized_)
         {
@@ -164,7 +164,7 @@ namespace local_planner{
         return true;
     }
 
-    bool LocalPlanner::computeVelocityCommands(geometry_msgs::Twist& cmd_vel)
+    bool TurtlePlanner::computeVelocityCommands(geometry_msgs::Twist& cmd_vel)
     {
         if(!initialized_)
         {
@@ -214,11 +214,12 @@ namespace local_planner{
             std::cout << "Distanza raggiunta" << std::endl;
             //coordinate raggiunte. Vettore velocità lineare rimane nullo.
             cmd_vel.linear.x=0.0;
-
+            cmd_vel.linear.y=0.0;
+            cmd_vel.linear.z=0.0;
            
             if(std::fabs(angles::shortest_angular_distance(curr_robot_orientation,goal_orientation))<=angle_tolerance){
                 //anche l'orientazione del goal è stata raggiunta
-                new_robot_ang_vel_z=0.0;
+                cmd_vel.angular.z=0.0;
                 goal_reached=true;
                 std::cout<<"Orientazione goal raggiunta"<<std::endl;
                 std::cout<<"GOAL RAGGIUNTO"<<std::endl;
@@ -227,7 +228,9 @@ namespace local_planner{
                 // Se le coordinate del goal sono state raggiunte ma l'orientazione finale no, la velocità angolare deve 
                 // essere calcolata per far ruotare il robot nella posa finale del goal
                 std::cout << "Orientazione non raggiunta" << std::endl;
-                cmd_vel.angular.z=0.9*(angles::shortest_angular_distance(curr_robot_orientation,goal_orientation));
+                cmd_vel.angular.z=K_p*(angles::shortest_angular_distance(curr_robot_orientation,goal_orientation));
+                cmd_vel.angular.y=0;
+                cmd_vel.angular.x=0;
             }
         }
         else{
@@ -235,29 +238,59 @@ namespace local_planner{
             
             //IMPLEMENTAZIONE LEGGI DI CONTROLLO PROPORZIONALI VISTE NEL LAB03 ROS
 
-            //VELOCITÀ ANGOLARE:
-            //1) verifichiamo che la velocità angolare calcolata sia compresa tra [-1,1] rad/s
-            if(std::fabs(0.9*(angles::shortest_angular_distance(curr_robot_orientation, std::atan2(goal_coordinates[1]-curr_robot_coordinates[1],goal_coordinates[0]-curr_robot_coordinates[0]))))<= 1){
-                cmd_vel.angular.z=0.9*(angles::shortest_angular_distance(curr_robot_orientation, std::atan2(goal_coordinates[1]-curr_robot_coordinates[1],goal_coordinates[0]-curr_robot_coordinates[0])));
-            }
-            else{
-                //se non lo è allora si verifica il segno della velocità e si setta la corrispondente velocità massima ammissibile
-                if(0.9*(angles::shortest_angular_distance(curr_robot_orientation, std::atan2(goal_coordinates[1]-curr_robot_coordinates[1],goal_coordinates[0]-curr_robot_coordinates[0])))>0){
-                    cmd_vel.angular.z=1;
+            //verifichiamo che l'angolo tra direzione x del robot e il goal sia inferiore a un certo valore (pi/2)
+            if(std::fabs(angles::shortest_angular_distance(curr_robot_orientation, std::atan2(goal_coordinates[1]-curr_robot_coordinates[1],goal_coordinates[0]-curr_robot_coordinates[0])))<=_PI/2){
+                //possiamo eseguire una combo di traslazione lungo x e rotazione lungo z
+
+                //VELOCITÀ ANGOLARE:
+                //1) verifichiamo che la velocità angolare calcolata sia compresa tra [-1,1] rad/s
+                if(std::fabs(K_p*(angles::shortest_angular_distance(curr_robot_orientation, std::atan2(goal_coordinates[1]-curr_robot_coordinates[1],goal_coordinates[0]-curr_robot_coordinates[0]))))<= 1){
+                    cmd_vel.angular.z=K_p*(angles::shortest_angular_distance(curr_robot_orientation, std::atan2(goal_coordinates[1]-curr_robot_coordinates[1],goal_coordinates[0]-curr_robot_coordinates[0])));
+                    cmd_vel.angular.y=0;
+                    cmd_vel.angular.x=0;
                 }
                 else{
-                    cmd_vel.angular.z=-1;
+                    //se non lo è allora si verifica il segno della velocità e si setta la corrispondente velocità massima ammissibile
+                    if(K_p*(angles::shortest_angular_distance(curr_robot_orientation, std::atan2(goal_coordinates[1]-curr_robot_coordinates[1],goal_coordinates[0]-curr_robot_coordinates[0])))>0){
+                        cmd_vel.angular.z=1;
+                        cmd_vel.angular.y=0;
+                        cmd_vel.angular.x=0;
+                    }
+                    else{
+                        cmd_vel.angular.z=-1;
+                        cmd_vel.angular.y=0;
+                        cmd_vel.angular.x=0;
+                    }
+                }
+
+                //VELOCITÀ LINEARE:
+                //si verifica che la velocità calcolata non superi un valore massimo di 0.5 m/s
+                if(K_r*std::sqrt(pow(goal_coordinates[0]-curr_robot_coordinates[0],2)+pow(goal_coordinates[1]-curr_robot_coordinates[1],2))<=0.5){
+                    cmd_vel.linear.x=K_r*std::sqrt(pow(goal_coordinates[0]-curr_robot_coordinates[0],2)+pow(goal_coordinates[1]-curr_robot_coordinates[1],2));
+                    cmd_vel.linear.y=0;
+                    cmd_vel.linear.z=0;
+                }
+                else{
+                    cmd_vel.linear.x=0.5;
+                    cmd_vel.linear.y=0;
+                    cmd_vel.linear.z=0;
                 }
             }
-
-            //VELOCITÀ LINEARE:
-            //si verifica che la elocità calcolata non superi un valore massimo di 0.5 m/s
-            if(0.9*std::sqrt(pow(goal_coordinates[0]-curr_robot_coordinates[0],2)+pow(goal_coordinates[1]-curr_robot_coordinates[1],2))<=0.5){
-                cmd_vel.linear.x=0.9*std::sqrt(pow(goal_coordinates[0]-curr_robot_coordinates[0],2)+pow(goal_coordinates[1]-curr_robot_coordinates[1],2));
-            }
             else{
-                cmd_vel.linear.x=0.5;
+                //conviene prima ruotare il robot lungo z mantenendo la traslazione ferma
+                if(angles::shortest_angular_distance(curr_robot_orientation, std::atan2(goal_coordinates[1]-curr_robot_coordinates[1],goal_coordinates[0]-curr_robot_coordinates[0]))>0){
+                        cmd_vel.angular.z=1;
+                        cmd_vel.angular.y=0;
+                        cmd_vel.angular.x=0;
+                    }
+                    else{
+                        cmd_vel.angular.z=-1;
+                        cmd_vel.angular.y=0;
+                        cmd_vel.angular.x=0;
+                    }
+
             }
+            
         }
 
 
@@ -272,7 +305,7 @@ namespace local_planner{
         return true;
     }
 
-    bool LocalPlanner::isGoalReached()
+    bool TurtlePlanner::isGoalReached()
     {
         if(!initialized_)
         {

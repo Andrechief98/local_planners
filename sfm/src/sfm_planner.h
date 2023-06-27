@@ -1,5 +1,5 @@
-#ifndef LOCAL_PLANNER_H_
-#define LOCAL_PLANNER_H_
+#ifndef SFM_PLANNER_H_
+#define SFM_PLANNER_H_
 
 // abstract class from which our plugin inherits
 #include <nav_core/base_local_planner.h>
@@ -22,14 +22,14 @@ static const double _TWO_PI= 6.2831853071795864769252867665590057683943387987502
 
 nav_msgs::Odometry robot_pose_;
 
-namespace local_planner{
+namespace sfm_planner{
 
-class LocalPlanner : public nav_core::BaseLocalPlanner{
+class SfmPlanner : public nav_core::BaseLocalPlanner{
 public:
-    LocalPlanner();
-    LocalPlanner(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros);
+    SfmPlanner();
+    SfmPlanner(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros);
 
-    ~LocalPlanner();
+    ~SfmPlanner();
 
     void initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros);
 
@@ -77,6 +77,7 @@ private:
     double angle_tolerance=0.17;
     bool goal_reached=false;
     
+    double max_lin_acc_x=2;
     double max_lin_vel=0.5; //da ricavare dal file config dell'interbotix
     double max_angular_vel_z=1; //da ricavare dal file config dell'interbotix
     double desired_vel = 0.5; //valore da ricavare direttamente dal file dell'interbotix

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(local_planner)
+project(sfm_planner)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -24,7 +24,6 @@ find_package(catkin REQUIRED COMPONENTS
   tf2
   tf2_geometry_msgs
   tf2_ros
-
 )
 
 
@@ -119,7 +118,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
  INCLUDE_DIRS include
- LIBRARIES local_planner
+ LIBRARIES sfm_planner
  CATKIN_DEPENDS nav_core roscpp rospy std_msgs base_local_planner nav_msgs pluginlib sensor_msgs roscpp tf2 tf2_ros
  DEPENDS system_lib
 )
@@ -140,9 +139,10 @@ include_directories(
 # add_library(${PROJECT_NAME}
 #   src/${PROJECT_NAME}/local_planner.cpp
 # )
-add_library(local_planner_lib src/local_planner.cpp)
-add_dependencies(local_planner_lib ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(local_planner_lib ${catkin_LIBRARIES})
+
+add_library(sfm_planner_lib src/sfm_planner.cpp)
+add_dependencies(sfm_planner_lib ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(sfm_planner_lib ${catkin_LIBRARIES})
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries

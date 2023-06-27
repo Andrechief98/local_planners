@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>local_planner</name>
+  <name>turtle_planner</name>
   <version>0.0.0</version>
   <description>The local_planner package</description>
 
@@ -80,7 +80,8 @@
   <!-- The export tag contains other, unspecified, tags -->
   <export>
     <!-- Other tools can request additional information be placed here -->
-    <nav_core plugin="${prefix}/lp_plugin.xml"/>
+    <nav_core plugin="${prefix}/turtle_plugin.xml"/>
 
   </export>
+
 </package>

@@ -1,4 +1,4 @@
-#include "local_planner.h"
+#include "sfm_planner.h"
 #include <pluginlib/class_list_macros.h>
 #include <nav_msgs/Odometry.h>
 #include <vector>
@@ -8,7 +8,7 @@
 
 
 
-PLUGINLIB_EXPORT_CLASS(local_planner::LocalPlanner, nav_core::BaseLocalPlanner)
+PLUGINLIB_EXPORT_CLASS(sfm_planner::SfmPlanner, nav_core::BaseLocalPlanner)
 
 void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
 {
@@ -102,19 +102,19 @@ std::vector<double> computeVelocityFromForce(std::vector<double> Ftot, std::vect
 }
 
 
-namespace local_planner{
+namespace sfm_planner{
 
-    LocalPlanner::LocalPlanner() : costmap_ros_(NULL), tf_(NULL), initialized_(false){}
+    SfmPlanner::SfmPlanner() : costmap_ros_(NULL), tf_(NULL), initialized_(false){}
 
-    LocalPlanner::LocalPlanner(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros) : costmap_ros_(NULL), tf_(NULL), initialized_(false)
+    SfmPlanner::SfmPlanner(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros) : costmap_ros_(NULL), tf_(NULL), initialized_(false)
     {
         initialize(name, tf, costmap_ros);
     }
 
-    LocalPlanner::~LocalPlanner() {}
+    SfmPlanner::~SfmPlanner() {}
 
     // Take note that tf::TransformListener* has been changed to tf2_ros::Buffer* in ROS Noetic
-    void LocalPlanner::initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros)
+    void SfmPlanner::initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros)
     {
         if(!initialized_)
         {   
@@ -130,7 +130,7 @@ namespace local_planner{
         ROS_INFO("inizializzazione local planner avvenuta");
     }
 
-    bool LocalPlanner::setPlan(const std::vector<geometry_msgs::PoseStamped>& orig_global_plan)
+    bool SfmPlanner::setPlan(const std::vector<geometry_msgs::PoseStamped>& orig_global_plan)
     {
         if(!initialized_)
         {
@@ -164,7 +164,7 @@ namespace local_planner{
         return true;
     }
 
-    bool LocalPlanner::computeVelocityCommands(geometry_msgs::Twist& cmd_vel)
+    bool SfmPlanner::computeVelocityCommands(geometry_msgs::Twist& cmd_vel)
     {
         if(!initialized_)
         {
@@ -337,7 +337,7 @@ namespace local_planner{
         return true;
     }
 
-    bool LocalPlanner::isGoalReached()
+    bool SfmPlanner::isGoalReached()
     {
         if(!initialized_)
         {

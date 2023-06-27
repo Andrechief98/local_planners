@@ -1,0 +1,7 @@
+<library path="lib/libsfm_planner_lib">
+        <class name ="sfm_planner/SfmPlanner" type ="sfm_planner::SfmPlanner" base_class_type= "nav_core::BaseLocalPlanner">
+                <description>
+                        Simplest Plugin for BaseLocalPlanner
+                </description>
+        </class>
+</library>
