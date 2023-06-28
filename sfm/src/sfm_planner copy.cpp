@@ -1,4 +1,4 @@
-#include "turtle_planner.h"
+#include "sfm_planner.h"
 #include <pluginlib/class_list_macros.h>
 #include <nav_msgs/Odometry.h>
 #include <vector>
@@ -8,7 +8,7 @@
 
 
 
-PLUGINLIB_EXPORT_CLASS(turtle_planner::TurtlePlanner, nav_core::BaseLocalPlanner)
+PLUGINLIB_EXPORT_CLASS(sfm_planner::SfmPlanner, nav_core::BaseLocalPlanner)
 
 void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
 {
@@ -41,6 +41,9 @@ std::vector<double> compute_direction(std::vector<double> vec1, std::vector<doub
         
         std::vector<double> dir={0,0};
         double norm = vect_norm2(vec1, vec2);
+        if (norm <=0.01){
+            norm=0.01;
+        }
 
         for(int i=0; i<2; i++){
             dir[i]=(vec1[i]-vec2[i])/norm;
@@ -102,19 +105,19 @@ std::vector<double> computeVelocityFromForce(std::vector<double> Ftot, std::vect
 }
 
 
-namespace turtle_planner{
+namespace sfm_planner{
 
-    TurtlePlanner::TurtlePlanner() : costmap_ros_(NULL), tf_(NULL), initialized_(false){}
+    SfmPlanner::SfmPlanner() : costmap_ros_(NULL), tf_(NULL), initialized_(false){}
 
-    TurtlePlanner::TurtlePlanner(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros) : costmap_ros_(NULL), tf_(NULL), initialized_(false)
+    SfmPlanner::SfmPlanner(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros) : costmap_ros_(NULL), tf_(NULL), initialized_(false)
     {
         initialize(name, tf, costmap_ros);
     }
 
-    TurtlePlanner::~TurtlePlanner() {}
+    SfmPlanner::~SfmPlanner() {}
 
     // Take note that tf::TransformListener* has been changed to tf2_ros::Buffer* in ROS Noetic
-    void TurtlePlanner::initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros)
+    void SfmPlanner::initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros)
     {
         if(!initialized_)
         {   
@@ -130,7 +133,7 @@ namespace turtle_planner{
         ROS_INFO("inizializzazione local planner avvenuta");
     }
 
-    bool TurtlePlanner::setPlan(const std::vector<geometry_msgs::PoseStamped>& orig_global_plan)
+    bool SfmPlanner::setPlan(const std::vector<geometry_msgs::PoseStamped>& orig_global_plan)
     {
         if(!initialized_)
         {
@@ -164,7 +167,7 @@ namespace turtle_planner{
         return true;
     }
 
-    bool TurtlePlanner::computeVelocityCommands(geometry_msgs::Twist& cmd_vel)
+    bool SfmPlanner::computeVelocityCommands(geometry_msgs::Twist& cmd_vel)
     {
         if(!initialized_)
         {
@@ -206,97 +209,129 @@ namespace turtle_planner{
         std::cout << "  *Robot coordinates vector  : " << curr_robot_coordinates[0] << " " << curr_robot_coordinates[1] << std::endl;
         std::cout << "  *Robot orientation z-axis (radians) [-pi,pi] : " << curr_robot_orientation << std::endl; 
 
-       
+        //2) calcolo versore direzione:
+        e=compute_direction(goal_coordinates,curr_robot_coordinates);
 
-        //VERIFICA RAGGIUNGIMENTO GOAL E CALCOLO DELLE VELOCITÀ
+
+        //CALCOLO FORZA ATTRATTIVA:
+        //1) creazione vettore velocità lineare attuale
+        curr_robot_lin_vel={robot_pose_.twist.twist.linear.x, robot_pose_.twist.twist.linear.y}; //non so perchè con i messaggi di odometria non accetta il push_back() per inserirli in un vettore
+        
+        std::cout << "\n";
+        std::cout << "**VETTORE VELOCITÀ ROBOT ATTUALE: " << std::endl;
+        std::cout << "  *Robot velocity vector  : " << curr_robot_lin_vel[0] << " " << curr_robot_lin_vel[1] << std::endl; 
+
+
+        //2) calcolo forza attrattiva
+        F_att={0,0};
+        F_rep={0,0};
+        F_tot={0,0};
+        
+        
+        for(int i=0; i<e.size(); i++){
+            //calcolo forza attrattiva
+            F_att[i]=(desired_vel*e[i]-curr_robot_lin_vel[i])/alfa;
+            //calcolo forza repulsiva
+            F_rep[i]=0;
+
+            //calcolo forza totale risultante
+            F_tot[i]=F_att[i]+F_rep[i];   
+        }
+
+        std::cout << "\n";
+        std::cout << "**FORZA RISULTANTE CALCOLATA: " << std::endl;
+        std::cout << "  *Total force vector  : " << F_tot[0] << " " << F_tot[1] << std::endl; 
+
+
+        new_robot_lin_vel={0,0}; //inizializzo il vettore delle velocità
+        
+
+        //VERIFICA RAGGIUNGIMENTO GOAL 
         
         if(vect_norm2(goal_coordinates,curr_robot_coordinates)<=distance_tolerance){
             std::cout << "Distanza raggiunta" << std::endl;
             //coordinate raggiunte. Vettore velocità lineare rimane nullo.
-            cmd_vel.linear.x=0.0;
-            cmd_vel.linear.y=0.0;
+            new_robot_lin_vel={0,0};
+
            
             if(std::fabs(angles::shortest_angular_distance(curr_robot_orientation,goal_orientation))<=angle_tolerance){
                 //anche l'orientazione del goal è stata raggiunta
-                cmd_vel.angular.z=0.0;
+                new_robot_ang_vel_z=0;
                 goal_reached=true;
                 std::cout<<"Orientazione goal raggiunta"<<std::endl;
                 std::cout<<"GOAL RAGGIUNTO"<<std::endl;
             }
             else{
                 // Se le coordinate del goal sono state raggiunte ma l'orientazione finale no, la velocità angolare deve 
-                // essere calcolata per far ruotare il robot nella posa finale del goal
+                // essere calcolata per far ruotare il robot nella posa finale indicata
                 std::cout << "Orientazione non raggiunta" << std::endl;
-                cmd_vel.angular.z=K_p*(angles::shortest_angular_distance(curr_robot_orientation,goal_orientation));
-                cmd_vel.angular.y=0;
-                cmd_vel.angular.x=0;
+
+                if(angles::shortest_angular_distance(curr_robot_orientation,goal_orientation) >=0){
+                    //la rotazione è tra [0;+pi], per cui la velocità di rotazione verso la goal orientation deve essere POSITIVA
+                    new_robot_ang_vel_z=K_p*(angles::shortest_angular_distance(curr_robot_orientation,goal_orientation));
+                }
+                else{
+                    //la rotiazione è tra [-pi;0], per cui la velocità di rotazione verso la goal orientation deve essere NEGATIVA
+                    new_robot_ang_vel_z=K_p*(angles::shortest_angular_distance(curr_robot_orientation,goal_orientation));
+                }
             }
         }
         else{
             std::cout << "Distanza non raggiunta" << std::endl;
-            
-            //IMPLEMENTAZIONE LEGGI DI CONTROLLO PROPORZIONALI VISTE NEL LAB03 ROS
 
-            //verifichiamo che l'angolo tra direzione x del robot e il goal sia inferiore a un certo valore (pi/2)
-            if(std::fabs(angles::shortest_angular_distance(curr_robot_orientation, std::atan2(goal_coordinates[1]-curr_robot_coordinates[1],goal_coordinates[0]-curr_robot_coordinates[0])))<=_PI/2){
-                //possiamo eseguire una combo di traslazione lungo x e rotazione lungo z
+            if(std::fabs(angles::shortest_angular_distance(curr_robot_orientation,std::atan2(F_tot[1],F_tot[0])))<=_PI/4){
+                //la rotazione per muovere il robot nella direzione della forza è compresa in [-pi/2;pi/2]
+                //possiamo eseguire una combo di rotazione e movimento in avanti
 
-                //VELOCITÀ ANGOLARE:
-                //1) verifichiamo che la velocità angolare calcolata sia compresa tra [-1,1] rad/s
-                if(std::fabs(K_p*(angles::shortest_angular_distance(curr_robot_orientation, std::atan2(goal_coordinates[1]-curr_robot_coordinates[1],goal_coordinates[0]-curr_robot_coordinates[0]))))<= 1){
-                    cmd_vel.angular.z=K_p*(angles::shortest_angular_distance(curr_robot_orientation, std::atan2(goal_coordinates[1]-curr_robot_coordinates[1],goal_coordinates[0]-curr_robot_coordinates[0])));
-                    cmd_vel.angular.y=0;
-                    cmd_vel.angular.x=0;
+                //ROTAZIONE:
+                if(angles::shortest_angular_distance(curr_robot_orientation,std::atan2(F_tot[1],F_tot[0]))>=0)
+                {
+                    //la rotazione è tra [0;+pi], per cui la velocità di rotazione verso la direzione della forza deve essere POSITIVA
+                    new_robot_ang_vel_z=K_p*angles::shortest_angular_distance(curr_robot_orientation,std::atan2(F_tot[1],F_tot[0]));
                 }
                 else{
-                    //se non lo è allora si verifica il segno della velocità e si setta la corrispondente velocità massima ammissibile
-                    if(K_p*(angles::shortest_angular_distance(curr_robot_orientation, std::atan2(goal_coordinates[1]-curr_robot_coordinates[1],goal_coordinates[0]-curr_robot_coordinates[0])))>0){
-                        cmd_vel.angular.z=1;
-                        cmd_vel.angular.y=0;
-                        cmd_vel.angular.x=0;
-                    }
-                    else{
-                        cmd_vel.angular.z=-1;
-                        cmd_vel.angular.y=0;
-                        cmd_vel.angular.x=0;
-                    }
+                    //la rotazione è tra [-pi;0], per cui la velocità di rotazione verso la direzione della forza deve essere NEGATIVA
+                    new_robot_ang_vel_z=K_p*angles::shortest_angular_distance(curr_robot_orientation,std::atan2(F_tot[1],F_tot[0]));
                 }
 
-                //VELOCITÀ LINEARE:
-                //si verifica che la velocità calcolata non superi un valore massimo di 0.5 m/s
-                if(K_r*std::sqrt(pow(goal_coordinates[0]-curr_robot_coordinates[0],2)+pow(goal_coordinates[1]-curr_robot_coordinates[1],2))<=0.5){
-                    cmd_vel.linear.x=K_r*std::sqrt(pow(goal_coordinates[0]-curr_robot_coordinates[0],2)+pow(goal_coordinates[1]-curr_robot_coordinates[1],2));
-                    cmd_vel.linear.y=0;
-                    cmd_vel.linear.z=0;
-                }
-                else{
-                    cmd_vel.linear.x=0.5;
-                    cmd_vel.linear.y=0;
-                    cmd_vel.linear.z=0;
-                }
+
+                //TRASLAZIONE:  
+                //Calcolo velocità lineare lungo unica direzione (x) a causa della differential drive - 
+                //(la funzione verifica già se le componenti superano il valore limite di velocità)
+                new_robot_lin_vel=computeVelocityFromForce(F_tot, curr_robot_lin_vel, max_lin_vel, delta_t);
             }
+
             else{
-                //conviene prima ruotare il robot lungo z mantenendo la traslazione ferma
-                if(angles::shortest_angular_distance(curr_robot_orientation, std::atan2(goal_coordinates[1]-curr_robot_coordinates[1],goal_coordinates[0]-curr_robot_coordinates[0]))>0){
-                    cmd_vel.angular.z=1;
-                    cmd_vel.angular.y=0;
-                    cmd_vel.angular.x=0;
+                //è preferibile far ruotare il robot verso la direzione della forza prima di farlo muovere linearmente
+                if(angles::shortest_angular_distance(curr_robot_orientation,std::atan2(F_tot[1],F_tot[0]))>=0)
+                {
+                    //la rotazione è tra [0;+pi], per cui la velocità di rotazione verso la direzione della forza deve essere POSITIVA
+                    new_robot_ang_vel_z=max_angular_vel_z;
                 }
-                
                 else{
-                    cmd_vel.angular.z=-1;
-                    cmd_vel.angular.y=0;
-                    cmd_vel.angular.x=0;
+                    //la rotazione è tra [-pi;0], per cui la velocità di rotazione verso la direzione della forza deve essere NEGATIVA
+                    new_robot_ang_vel_z=-max_angular_vel_z;
                 }
-
             }
-            
+
         }
+
+        std::cout << "\n";
+        std::cout << "**NUOVA VELOCITÀ ROBOT CALCOLATe: " << std::endl;
+        std::cout << "  *New velocity vector  : " << new_robot_lin_vel[0] << " " << new_robot_lin_vel[1] << std::endl; 
+        std::cout << "  *New angular velocity : " << new_robot_ang_vel_z << std::endl;
 
 
         //PUBBLICAZIONE MESSAGGIO
         pub_cmd = nh.advertise<geometry_msgs::Twist>("/cmd_vel",1);
-        
+
+        cmd_vel.angular.x=0.0;
+        cmd_vel.angular.y=0.0;
+        cmd_vel.angular.z=new_robot_ang_vel_z;
+        cmd_vel.linear.x=vect_norm1(new_robot_lin_vel);
+        cmd_vel.linear.y=0.0;
+        cmd_vel.linear.z=0.0;
+
         pub_cmd.publish(cmd_vel);
 
         std::cout << "\nmessaggio pubblicato" << std::endl;
@@ -305,7 +340,7 @@ namespace turtle_planner{
         return true;
     }
 
-    bool TurtlePlanner::isGoalReached()
+    bool SfmPlanner::isGoalReached()
     {
         if(!initialized_)
         {

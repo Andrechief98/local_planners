@@ -14,6 +14,7 @@
 #include <base_local_planner/odometry_helper_ros.h>
 #include <nav_msgs/Odometry.h>
 #include <vector>
+#include <gazebo_msgs/ModelStates.h>
 
 using namespace std;
 
@@ -21,6 +22,7 @@ static const double     _PI= 3.1415926535897932384626433832795028841971693993751
 static const double _TWO_PI= 6.2831853071795864769252867665590057683943387987502116419498891846156328125724179972560696;
 
 nav_msgs::Odometry robot_pose_;
+gazebo_msgs::ModelStates people_;
 
 namespace sfm_planner{
 
@@ -39,14 +41,33 @@ public:
 
     bool isGoalReached();
 
+    void getOdometry();
+
+    void set_Position_Orientation_Info();
+
+    void setVelocityInfo();
+    
+    void computeAttractiveForce();
+
+    void getPeopleInformation();
+
+    void computeRepulsiveForce();
+
+    void computeTotalForce();
+
+
 private:
     ros::Publisher pub;
     ros::Subscriber sub;
 
     ros::Subscriber sub_odom;
+    ros::Subscriber sub_people;
     ros::Subscriber sub_goal;
     ros::Publisher pub_cmd;
     ros::NodeHandle nh;
+
+    ros::ServiceClient people_client;
+
     costmap_2d::Costmap2DROS* costmap_ros_;
     tf2_ros::Buffer* tf_;
     geometry_msgs::Twist cmd_vel_;
@@ -63,28 +84,31 @@ private:
     std::vector<double> curr_robot_coordinates;
     double curr_robot_orientation;
     std::vector<double> curr_robot_lin_vel;
+    double curr_robot_ang_vel;
 
     std::vector<double> new_robot_lin_vel;
     double new_robot_ang_vel_z;
+    std::vector<double> new_robot_pos;
+
 
     //ROBOT SOCIAL FORCES
     std::vector<double> e;
-    std::vector<double> F_att;
-    std::vector<double> F_rep;
-    std::vector<double> F_tot;
+    std::vector<double> F_att={0,0};
+    std::vector<double> F_rep={0,0};
+    std::vector<double> F_tot={0,0};
 
-    double distance_tolerance=0.1;
-    double angle_tolerance=0.17;
+    double distance_tolerance=0.15;
+    double angle_tolerance=0.13;
     bool goal_reached=false;
+    double beta;
     
-    double max_lin_acc_x=2;
-    double max_lin_vel=0.5; //da ricavare dal file config dell'interbotix
+    double max_lin_acc_x=1;
     double max_angular_vel_z=1; //da ricavare dal file config dell'interbotix
     double desired_vel = 0.5; //valore da ricavare direttamente dal file dell'interbotix
     //double max_acc=2; //valore massimo di accelerazione (da sostituire con quelli ricavabili dal file di configurazione interbotix)
-    double delta_t=0.7;
-    double alfa=0.35;   //valore da inserire nel file di configurazione interbotix (se fattibile)
-    double K_p=0.75; //costante proporzionale per il calcolo della velocità angolare (proporzionale all'errore);
+    double delta_t=0.2;
+    double alfa=0.2;   //valore da inserire nel file di configurazione interbotix (se fattibile)
+    double K_p=0.9; //costante proporzionale per il calcolo della velocità angolare (proporzionale all'errore);
     double K_r=0.9;
     };
 };

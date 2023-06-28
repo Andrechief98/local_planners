@@ -24,6 +24,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf2
   tf2_geometry_msgs
   tf2_ros
+  gazebo_msgs
 )
 
 
@@ -118,8 +119,8 @@ find_package(catkin REQUIRED COMPONENTS
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
  INCLUDE_DIRS include
- LIBRARIES sfm_planner
- CATKIN_DEPENDS nav_core roscpp rospy std_msgs base_local_planner nav_msgs pluginlib sensor_msgs roscpp tf2 tf2_ros
+ LIBRARIES sfm_planner 
+ CATKIN_DEPENDS nav_core roscpp rospy std_msgs base_local_planner nav_msgs pluginlib sensor_msgs roscpp tf2 tf2_ros gazebo_msgs
  DEPENDS system_lib
 )
 
@@ -140,9 +141,11 @@ include_directories(
 #   src/${PROJECT_NAME}/local_planner.cpp
 # )
 
+#add_library(sfm_planner_lib src/sfm_planner.cpp)
 add_library(sfm_planner_lib src/sfm_planner.cpp)
 add_dependencies(sfm_planner_lib ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(sfm_planner_lib ${catkin_LIBRARIES})
+
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
