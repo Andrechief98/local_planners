@@ -117,12 +117,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## LIBRARIES: libraries you create in this project that dependent projects also need
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
-catkin_package(
- INCLUDE_DIRS include
- LIBRARIES sfm_planner 
- CATKIN_DEPENDS nav_core roscpp rospy std_msgs base_local_planner nav_msgs pluginlib sensor_msgs roscpp tf2 tf2_ros gazebo_msgs
- DEPENDS system_lib
-)
+
 
 ###########
 ## Build ##
@@ -135,6 +130,12 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
+catkin_package(
+  INCLUDE_DIRS include
+  LIBRARIES sfm_planner functions classes
+  CATKIN_DEPENDS nav_core roscpp rospy std_msgs base_local_planner nav_msgs pluginlib sensor_msgs roscpp tf2 tf2_ros gazebo_msgs
+  DEPENDS system_lib
+)
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
@@ -142,10 +143,25 @@ include_directories(
 # )
 
 #add_library(sfm_planner_lib src/sfm_planner.cpp)
-add_library(sfm_planner_lib src/sfm_planner.cpp)
+add_library(sfm_planner_lib src/sfm_planner.cpp src/functions.cpp src/classes.cpp)
 add_dependencies(sfm_planner_lib ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(sfm_planner_lib ${catkin_LIBRARIES})
 
+
+install(TARGETS sfm_planner_lib
+       ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+       LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+       RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
+       )
+
+install(FILES sfm_plugin.xml
+    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+
+install(DIRECTORY include/${PROJECT_NAME}/
+  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+  PATTERN ".svn" EXCLUDE
+)
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries

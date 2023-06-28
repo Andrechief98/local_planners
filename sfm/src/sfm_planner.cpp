@@ -1,4 +1,3 @@
-#include "sfm_planner.h"
 #include <pluginlib/class_list_macros.h>
 #include <nav_msgs/Odometry.h>
 #include <vector>
@@ -10,73 +9,11 @@
 #include <gazebo_msgs/GetModelState.h>
 #include <gazebo_msgs/SetModelState.h>
 
-
-#include "functions.h"
+#include <sfm_planner/sfm_planner.h>
+#include <sfm_planner/functions.h>
 
 
 PLUGINLIB_EXPORT_CLASS(sfm_planner::SfmPlanner, nav_core::BaseLocalPlanner)
-
-
-//***********FUNZIONI UTILI PER ESEGUIRE VARIE TASK PRELIMINARI PER IL CALCOLO DELLE FORZE (direttamente all'interno del file sfm.cppp):*************
-
-//CALCOLO DISTANZA (norma del vettore differenza tra due vettori, vec1 e vec2)
-double vect_norm2(std::vector<double> vec1, std::vector<double> vec2){
-        double norma;
-        std::vector<double> difference={0,0};
-        
-        for (int i=0; i<2; i++){
-            difference[i]=vec1[i]-vec2[i];
-        }
-        
-        norma = sqrt(difference[0]*difference[0]+difference[1]*difference[1]);
-        return norma;
-    }
-
-//CALCOLO NORMA DI UN VETTORE
-double vect_norm1(std::vector<double> vec1){
-        double norma=0;
-        norma = sqrt(vec1[0]*vec1[0]+vec1[1]*vec1[1]);
-        return norma;
-    }
-
-//STABILISCE IL VERSORE DIREZIONE RIVOLTO DA vec1 A vec2
-std::vector<double> compute_direction(std::vector<double> vec1, std::vector<double> vec2){
-        
-        std::vector<double> dir={0,0};
-        double norm = vect_norm2(vec1, vec2);
-
-        if (norm<0.11) norm=0.1; //se tende a zero allora la forza diventa troppo grande e può causare problemi
-
-        for(int i=0; i<2; i++){
-            dir[i]=(vec1[i]-vec2[i])/norm;
-        }
-
-        return dir;
-    }
-    
-//CALCOLA IL COSENO DELL'ANGOLO TRA I DUE VETTORI
-double compute_cos_gamma(std::vector<double> vec1, std::vector<double> vec2){
-    double coseno=0;
-    for(int i=0; i<vec1.size(); i++){
-        vec2[i]=-vec2[i];
-    }
-
-    coseno=(vec1[0]*vec2[0]+vec1[1]*vec2[1])/(vect_norm1(vec1)*vect_norm1(vec2));
-    return coseno;
-}
-
-//FUNZIONE SEGNO:
-int sign(double expression){
-    if (expression<1){
-        return -1;
-    }
-    else if(expression>1){
-        return 1;
-    }
-    else{
-        return 0;
-    }
-}
 
 
 // IMPLEMENTAZIONE EFFETTIVA PLUGIN
@@ -89,10 +26,24 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
 
 void people_callback(const gazebo_msgs::ModelStates msg_people)
 {
-  people_ = msg_people;
+    people_ = msg_people;
 
-  std::cout << "*********MESSAGGI PEOPLE RICEVUTI ****************" << std::endl;
-  std::cout << people_.name[2] << std::endl;
+    std::cout << "*********MESSAGGI PEOPLE RICEVUTI ****************" << std::endl;
+    //il messaggio people_ contiene:
+    //      name --> vettore di stringhe, ogni elemento è il nome di ogni modello in Gazebo
+    //      pose --> vettore di Pose msgs, ogni elemento è un messaggio Pose (legato al corrispondente elemento indicato nella stessa posizione nel vettore "name")
+    //      twist --> vettore di Twist msgs, ogni elemento è un messaggio Twist (legato al corrispondente elemento indicato nella stessa posizione nel vettore "name")
+
+    //dobbiamo estrarre il numero di pedoni presenti. 
+    //I primi due elementi sono:
+    //      GroundPlane
+    //      TrossenRoboticsBuilding (dipende se definito nel world)
+
+    //L'ultimo elemento è sempre:
+    //      Locobot
+
+
+    std::cout << people_.name[2] << std::endl;
 }
 
 namespace sfm_planner{
