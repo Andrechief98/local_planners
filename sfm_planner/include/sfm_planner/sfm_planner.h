@@ -15,6 +15,10 @@
 #include <nav_msgs/Odometry.h>
 #include <vector>
 #include <gazebo_msgs/ModelStates.h>
+#include <gazebo_msgs/ModelState.h>
+#include <string>
+#include <sfm_planner/classes.h>
+
 
 using namespace std;
 
@@ -22,7 +26,14 @@ static const double     _PI= 3.1415926535897932384626433832795028841971693993751
 static const double _TWO_PI= 6.2831853071795864769252867665590057683943387987502116419498891846156328125724179972560696;
 
 nav_msgs::Odometry robot_pose_;
+
 gazebo_msgs::ModelStates people_;
+std::vector<geometry_msgs::Pose> positions(10);
+std::vector<std::string> stringa_vector(10);
+std::vector<Pedestrian> global_list(10);
+std::string stringa;
+
+Pedestrian global_model;
 
 namespace sfm_planner{
 
@@ -56,6 +67,8 @@ public:
     void computeTotalForce();
 
 
+
+
 private:
     ros::Publisher pub;
     ros::Subscriber sub;
@@ -80,6 +93,10 @@ private:
     std::vector<double> goal_coordinates;
     double goal_orientation;
 
+    //MODELLI PEDONI GAZEBO
+    std::vector<Pedestrian> pedestrian_list;
+
+
     //ROBOT ODOMETRY AND VELOCITY:
     std::vector<double> curr_robot_coordinates;
     double curr_robot_orientation;
@@ -102,14 +119,20 @@ private:
     bool goal_reached=false;
     double beta;
     
+    double K_p=0.9; //costante proporzionale per il calcolo della velocità angolare (proporzionale all'errore);
+    double K_r=0.9;
     double max_lin_acc_x=1;
-    double max_angular_vel_z=1; //da ricavare dal file config dell'interbotix
+    double max_angular_vel_z=1.5; //da ricavare dal file config dell'interbotix
     double desired_vel = 0.5; //valore da ricavare direttamente dal file dell'interbotix
     //double max_acc=2; //valore massimo di accelerazione (da sostituire con quelli ricavabili dal file di configurazione interbotix)
     double delta_t=0.2;
+
+    //SOCIAL FORCE MODEL PARAMETERS
     double alfa=0.2;   //valore da inserire nel file di configurazione interbotix (se fattibile)
-    double K_p=0.9; //costante proporzionale per il calcolo della velocità angolare (proporzionale all'errore);
-    double K_r=0.9;
+    double lambda=0.3;
+    double A=1;
+    double B=0.9;
+    double radius=1;
     };
 };
 

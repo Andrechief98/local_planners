@@ -1,4 +1,4 @@
-#include "functions.h"
+#include <sfm_planner/functions.h>
 #include <iostream>
 #include <cmath>    //inclusione libreria matematica per eseguire radici quadrate
 #include <cstdlib>

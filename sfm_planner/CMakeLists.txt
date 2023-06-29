@@ -125,16 +125,17 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
-include_directories(
-  include
-  ${catkin_INCLUDE_DIRS}
-)
 
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES sfm_planner functions classes
-  CATKIN_DEPENDS nav_core roscpp rospy std_msgs base_local_planner nav_msgs pluginlib sensor_msgs roscpp tf2 tf2_ros gazebo_msgs
+  LIBRARIES sfm_planner functions classes 
+  CATKIN_DEPENDS nav_core roscpp rospy std_msgs base_local_planner nav_msgs pluginlib sensor_msgs roscpp tf2 tf2_ros gazebo_msgs 
   DEPENDS system_lib
+)
+
+include_directories(
+  include
+  ${catkin_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library

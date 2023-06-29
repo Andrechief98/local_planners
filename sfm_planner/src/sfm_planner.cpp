@@ -4,16 +4,22 @@
 #include <cmath>
 #include <boost/thread.hpp>
 #include <iostream>
+#include <string>
+#include <cstring>
 #include <tf2/buffer_core.h>
 #include <gazebo_msgs/ModelStates.h>
+#include <gazebo_msgs/ModelState.h>
 #include <gazebo_msgs/GetModelState.h>
-#include <gazebo_msgs/SetModelState.h>
+
+
 
 #include <sfm_planner/sfm_planner.h>
 #include <sfm_planner/functions.h>
+#include <sfm_planner/classes.h>
 
 
 PLUGINLIB_EXPORT_CLASS(sfm_planner::SfmPlanner, nav_core::BaseLocalPlanner)
+
 
 
 // IMPLEMENTAZIONE EFFETTIVA PLUGIN
@@ -24,11 +30,16 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
   //ROS_INFO("Odometria ricevuta!");
 }
 
-void people_callback(const gazebo_msgs::ModelStates msg_people)
+void people_callback(const gazebo_msgs::ModelStates::ConstPtr& people_msg)
 {
-    people_ = msg_people;
+    stringa_vector.resize(people_msg->name.size());
+    positions.resize(people_msg->name.size());
 
-    std::cout << "*********MESSAGGI PEOPLE RICEVUTI ****************" << std::endl;
+    for (int i=0; i<people_msg->name.size(); i++){
+        stringa_vector[i]=people_msg->name[i];
+        positions[i]=people_msg->pose[i]; 
+    }
+
     //il messaggio people_ contiene:
     //      name --> vettore di stringhe, ogni elemento è il nome di ogni modello in Gazebo
     //      pose --> vettore di Pose msgs, ogni elemento è un messaggio Pose (legato al corrispondente elemento indicato nella stessa posizione nel vettore "name")
@@ -41,14 +52,12 @@ void people_callback(const gazebo_msgs::ModelStates msg_people)
 
     //L'ultimo elemento è sempre:
     //      Locobot
-
-
-    std::cout << people_.name[2] << std::endl;
+  
 }
 
 namespace sfm_planner{
 
-    SfmPlanner::SfmPlanner() : costmap_ros_(NULL), tf_(NULL), initialized_(false){}
+    SfmPlanner::SfmPlanner() : costmap_ros_(NULL), tf_(NULL), initialized_(false), pedestrian_list(10){}
 
     SfmPlanner::SfmPlanner(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros) : costmap_ros_(NULL), tf_(NULL), initialized_(false)
     {
@@ -132,10 +141,52 @@ namespace sfm_planner{
     }
 
     void SfmPlanner::getPeopleInformation(){
+        pedestrian_list.clear();
+        
         sub_people = nh.subscribe<gazebo_msgs::ModelStates>("/gazebo/model_states", 1, &people_callback); //per le simulazioni su Gazebo
-        std::cout << "sottoscrizione avvenuta" << std::endl;
 
-        // //RICEZIONE DELLE INFORMAZIONI DI UN DETERMINATO MODELLO SPECIFICATO SU GAZEBO (necessario andare a fornire il nome del modello)
+        //otteniamo "stringa_vector" (contiene tutti i nomi dei modelli) e "positions" (contiene posizione e orientazione dei modelli)
+        int counter_actor=0;
+        std::string string_to_find = "actor";
+        
+        for(int i=0; i<stringa_vector.size();i++){
+            if(stringa_vector[i].find(string_to_find)!=-1){
+                counter_actor+=1;
+            }
+            else{
+                continue;
+            }
+        }
+
+        std::cout << pedestrian_list.size() <<std::endl;
+        pedestrian_list.resize(counter_actor);
+
+        counter_actor=0;
+        for(int i=0; i<stringa_vector.size();i++){
+            if(stringa_vector[i].find(string_to_find)!=-1){
+                Pedestrian modello;
+                modello.setName(stringa_vector[i]);
+                modello.setCurrentPosition(positions[i].position.x,positions[i].position.y);
+                pedestrian_list[counter_actor]=modello;
+                counter_actor+=1;
+            }
+            else{
+                continue;
+            }
+        }
+
+        
+        std::cout << "PEDESTRIAN INFO RECEIVED" << std::endl;
+        for (int i=0; i< pedestrian_list.size(); i++){
+            std::cout << pedestrian_list[i].pedestrianName <<std::endl;
+            std::cout << pedestrian_list[i].curr_pos[0] << " " << pedestrian_list[i].curr_pos[1] <<std::endl;
+        }
+        
+        
+
+        
+
+        //RICEZIONE DELLE INFORMAZIONI DI UN DETERMINATO MODELLO SPECIFICATO SU GAZEBO (necessario andare a fornire il nome del modello)
         // people_client = nh.serviceClient <gazebo_msgs::GetModelState>("/gazebo/get_model_state");
         // gazebo_msgs::GetModelState model_to_search;
         // model_to_search.request.model_name= (std::string) "actor1";
@@ -148,17 +199,44 @@ namespace sfm_planner{
         // {
         //     ROS_ERROR("Failed to magic move PR2! Error msg:%s",model_to_search.response.status_message.c_str());
         // }
+        // std::cout << model_to_search.response.pose.position.x << std::endl;
 
+        return;
     }
 
-    void SfmPlanner::computeRepulsiveForce(){
 
+    void SfmPlanner::computeRepulsiveForce(){
+        F_rep={0,0};
+
+        double dist=0;
+        double F_fov=0;
+        std::vector<double> n_ped={0,0};
+        std::vector<double> F_r={0,0};
+        F_rep={0,0};
+
+        for(int j=0; j<pedestrian_list.size(); j++){
+            dist=vect_norm2(curr_robot_coordinates, pedestrian_list[j].curr_pos);
+            n_ped=compute_direction(curr_robot_coordinates, pedestrian_list[j].curr_pos);
+            F_fov=lambda+(1-lambda)*((1+compute_cos_gamma(e,n_ped))/2); //forse al poste di e bisogna mettere la current robot orientation (dove punta l'asse x del robot)
+
+            for(int k=0; k<F_rep.size(); k++){
+                F_r[k]=A*exp((pedestrian_list[j].radius+radius-dist)/B)*F_fov*n_ped[k]; //forza dell'ostacolo espressa differentemente rispetto a quello del pedone
+            }
+
+            for(int k=0; k<F_rep.size(); k++){
+                F_rep[k]=F_rep[k]+F_r[k];
+            }
+        }   
+
+        std::cout << "forza repulsiva pedoni calcolata" << std::endl;
+        std::cout << F_rep[0] << " " << F_rep[1] << std::endl;
 
     }
 
 
     void SfmPlanner::computeTotalForce(){
-        for(int i=0; i<e.size(); i++){
+        F_tot={0,0};
+        for(int i=0; i<F_tot.size(); i++){
 
             F_tot[i]=F_att[i]+F_rep[i];   
 
@@ -261,8 +339,8 @@ namespace sfm_planner{
 
             for(int i=0; i<new_robot_lin_vel.size(); i++){
                 new_robot_lin_vel[i]=curr_robot_lin_vel[i]+delta_t*F_tot[i];
-                if(std::fabs(new_robot_lin_vel[i])>0.5){
-                    new_robot_lin_vel[i]=sign(new_robot_lin_vel[i])*0.5;
+                if(std::fabs(new_robot_lin_vel[i])>desired_vel){
+                    new_robot_lin_vel[i]=sign(new_robot_lin_vel[i])*desired_vel;
                 }
 
                 new_robot_pos[i]=curr_robot_coordinates[i]+delta_t*new_robot_lin_vel[i]; //adoperiamo la velocità del modello (calcolata dalle forze) anzichè quella effettiva del robot
