@@ -6,6 +6,7 @@
 
 #include <ros/ros.h>
 #include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 #include <tf2/utils.h>
 #include <angles/angles.h>
 #include <costmap_2d/costmap_2d_ros.h>
@@ -18,6 +19,7 @@
 #include <gazebo_msgs/ModelState.h>
 #include <string>
 #include <sfm_planner/classes.h>
+#include <sensor_msgs/LaserScan.h>
 
 
 using namespace std;
@@ -26,12 +28,15 @@ static const double     _PI= 3.1415926535897932384626433832795028841971693993751
 static const double _TWO_PI= 6.2831853071795864769252867665590057683943387987502116419498891846156328125724179972560696;
 
 nav_msgs::Odometry robot_pose_;
+//NECESSARI PER OTTENERE LE INFORMAZIONI SULL'OSTACOLO PIÙ VICINO DAL TOPIC /locobot/scan
+sensor_msgs::LaserScan obstacle_distances_;
+double obs_min_distance;
+double angle_obs_min_distance;
 
-gazebo_msgs::ModelStates people_;
+//NECESSARI PER OTTENERE LE INFO DEI MODELLI DA GAZEBO
+//gazebo_msgs::ModelStates people_;
 std::vector<geometry_msgs::Pose> positions(10);
 std::vector<std::string> stringa_vector(10);
-std::vector<Pedestrian> global_list(10);
-std::string stringa;
 
 Pedestrian global_model;
 
@@ -62,7 +67,11 @@ public:
 
     void getPeopleInformation();
 
-    void computeRepulsiveForce();
+    void computePedestrianRepulsiveForce();
+
+    void getObstacleInformation();
+
+    void computeObstacleRepulsiveForce();
 
     void computeTotalForce();
 
@@ -76,10 +85,15 @@ private:
     ros::Subscriber sub_odom;
     ros::Subscriber sub_people;
     ros::Subscriber sub_goal;
+    ros::Subscriber sub_obs;
     ros::Publisher pub_cmd;
     ros::NodeHandle nh;
 
     ros::ServiceClient people_client;
+
+    tf2_ros::Buffer tfBuffer;
+    tf2_ros::TransformListener listener;
+
 
     costmap_2d::Costmap2DROS* costmap_ros_;
     tf2_ros::Buffer* tf_;
@@ -111,28 +125,28 @@ private:
     //ROBOT SOCIAL FORCES
     std::vector<double> e;
     std::vector<double> F_att={0,0};
-    std::vector<double> F_rep={0,0};
+    std::vector<double> F_rep_ped={0,0};
+    std::vector<double> F_rep_obs={0,0};
     std::vector<double> F_tot={0,0};
 
-    double distance_tolerance=0.15;
+    double distance_tolerance=0.2;
     double angle_tolerance=0.13;
     bool goal_reached=false;
     double beta;
     
-    double K_p=0.9; //costante proporzionale per il calcolo della velocità angolare (proporzionale all'errore);
-    double K_r=0.9;
-    double max_lin_acc_x=1;
-    double max_angular_vel_z=1.5; //da ricavare dal file config dell'interbotix
-    double desired_vel = 0.5; //valore da ricavare direttamente dal file dell'interbotix
+    double K_p=0.8; //costante proporzionale per il calcolo della velocità angolare (proporzionale all'errore);
+    double max_lin_acc_x=7.5;
+    double max_angular_vel_z=1.3; //da ricavare dal file config dell'interbotix
+    double desired_vel = 1.2; //valore da ricavare direttamente dal file dell'interbotix
     //double max_acc=2; //valore massimo di accelerazione (da sostituire con quelli ricavabili dal file di configurazione interbotix)
     double delta_t=0.2;
 
     //SOCIAL FORCE MODEL PARAMETERS
-    double alfa=0.2;   //valore da inserire nel file di configurazione interbotix (se fattibile)
-    double lambda=0.3;
-    double A=1;
-    double B=0.9;
-    double radius=1;
+    double alfa=0.5;   //valore da inserire nel file di configurazione interbotix (se fattibile)
+    double lambda=0.7;
+    double A=0.99;
+    double B=0.1;
+    double radius=0.6;
     };
 };
 

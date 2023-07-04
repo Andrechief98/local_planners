@@ -31,7 +31,7 @@ class Pedestrian{
     public:
         std::string pedestrianName="";
         std::vector<double> curr_pos={0,0}; //current position of Pedestrian
-        double radius=1;
+        double radius=0.6;
 
     //CLASS METHODS
     Pedestrian();

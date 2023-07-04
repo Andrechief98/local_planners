@@ -55,14 +55,8 @@ double compute_cos_gamma(std::vector<double> vec1, std::vector<double> vec2){
 }
 
 //FUNZIONE SEGNO:
-int sign(double expression){
-    if (expression<1){
-        return -1;
-    }
-    else if(expression>1){
-        return 1;
-    }
-    else{
-        return 0;
-    }
+int sign(double x){
+    if (x > 0) return 1;
+    if (x < 0) return -1;
+    return 0;
 }
