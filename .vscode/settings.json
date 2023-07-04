@@ -81,7 +81,11 @@
         "typeindex": "cpp",
         "typeinfo": "cpp",
         "variant": "cpp",
-        "bit": "cpp"
+        "bit": "cpp",
+        "any": "cpp",
+        "codecvt": "cpp",
+        "regex": "cpp",
+        "future": "cpp"
     },
-    "cmake.sourceDirectory": "/home/andrea/catkin_ws/src/local_planners/sfm"
+    "cmake.sourceDirectory": "/home/andrea/catkin_ws/src/local_planners/sfm_planner"
 }

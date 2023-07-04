@@ -26,6 +26,7 @@
         "/home/andrea/catkin_ws/src/turtlebot3_simulations/turtlebot3_fake/include/**",
         "/home/andrea/catkin_ws/src/turtlebot3_simulations/turtlebot3_gazebo/include/**",
         "/home/andrea/catkin_ws/src/zed-ros-wrapper/zed-ros-interfaces/include/**",
+        "/home/andrea/catkin_ws/src/local_planners/sfm_planner/include/**",
         "/usr/include/**"
       ],
       "name": "ROS",

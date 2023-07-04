@@ -132,13 +132,20 @@ private:
     double distance_tolerance=0.2;
     double angle_tolerance=0.13;
     bool goal_reached=false;
+    //LEGGE DI CONTROLLO VELOCITÀ ANGOLARE
+    double alfa_angle;
+    double beta_angle;
+    double theta_angle;
+    double k=0.9;
+    double h=0.5;
+    double gam=0.8;
+
     double beta;
     
     double K_p=0.8; //costante proporzionale per il calcolo della velocità angolare (proporzionale all'errore);
-    double max_lin_acc_x=7.5;
+    double max_lin_acc_x=8;
     double max_angular_vel_z=1.3; //da ricavare dal file config dell'interbotix
-    double desired_vel = 1.2; //valore da ricavare direttamente dal file dell'interbotix
-    //double max_acc=2; //valore massimo di accelerazione (da sostituire con quelli ricavabili dal file di configurazione interbotix)
+    double desired_vel = 1.3; //valore da ricavare direttamente dal file dell'interbotix
     double delta_t=0.2;
 
     //SOCIAL FORCE MODEL PARAMETERS
