@@ -151,8 +151,37 @@ namespace sfm_planner{
         curr_robot_ang_vel=robot_pose_.twist.twist.angular.z;
         
         std::cout << "\n";
-        std::cout << "**VETTORE VELOCITÀ ROBOT ATTUALE: " << std::endl;
+        std::cout << "**VETTORE VELOCITÀ ROBOT ATTUALE RISPETTO AL BASE_FOOTPRINT (frame del robot): " << std::endl;
         std::cout << "  *Robot velocity vector  : " << curr_robot_lin_vel[0] << " " << curr_robot_lin_vel[1] << std::endl; 
+
+        //ci serve trasformare la velocità dal base_footprint al frame map
+
+        ros::Rate rate(10.0);
+        geometry_msgs::TransformStamped tf_result;
+        try {
+        tf_result = tfBuffer.lookupTransform("map", "locobot/base_footprint", ros::Time(0));
+        } catch (tf2::TransformException& ex) {
+        // TODO: handle lookup failure appropriately
+        }
+
+        
+        tf2::Quaternion q(
+            tf_result.transform.rotation.x,
+            tf_result.transform.rotation.y,
+            tf_result.transform.rotation.z,
+            tf_result.transform.rotation.w
+        );
+        tf2::Vector3 p(0,0,0);
+
+        tf2::Transform transform(q, p);
+        tf2::Vector3 velocity_in_child_frame(curr_robot_lin_vel[0],curr_robot_lin_vel[1],0);
+        tf2::Vector3 velocity_in_target_frame = transform * velocity_in_child_frame;
+        curr_robot_lin_vel={velocity_in_target_frame[0],velocity_in_target_frame[1]};
+
+        std::cout << "VELOCITY NEL BASE LINK FRAME: " << std::endl;
+        std::cout<< velocity_in_target_frame[0] << " " << velocity_in_target_frame[1]<< std::endl;
+        std::cout<< curr_robot_lin_vel[0] << " " << curr_robot_lin_vel[1] << std::endl;
+
 
         return;
     }
@@ -166,7 +195,8 @@ namespace sfm_planner{
             //calcolo forza attrattiva
             F_att[i]=(desired_vel*e[i]-curr_robot_lin_vel[i])/alfa;
         }
-
+        std::cout << "vettore e:"<< std::endl;
+        std::cout << e[0] << " " << e[1] << std::endl;
         std::cout << "forza attrattiva goal calcolata" << std::endl;
         std::cout << F_att[0] << " " << F_att[1] << std::endl;
 
@@ -431,7 +461,7 @@ namespace sfm_planner{
             std::cout << "------------- Distanza non raggiunta ----------------" << std::endl;
 
             for(int i=0; i<new_robot_lin_vel.size(); i++){
-                new_robot_lin_vel[i]=curr_robot_lin_vel[i]+delta_t*F_tot[i];
+                new_robot_lin_vel[i]=curr_robot_lin_vel[i]+delta_t*F_tot[i];// GROSSO PROBLEMA (SE F_tot È NEGATIVA ALLORA LA VELOCITÀ TENDE A RIDURSI A LIVELLO GLOBALE)
                 
                 if(std::fabs(new_robot_lin_vel[i])>desired_vel){
                 

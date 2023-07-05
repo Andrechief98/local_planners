@@ -24,7 +24,6 @@
 PLUGINLIB_EXPORT_CLASS(sfm_planner::SfmPlanner, nav_core::BaseLocalPlanner)
 
 
-
 // IMPLEMENTAZIONE EFFETTIVA PLUGIN
 
 void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
@@ -133,7 +132,8 @@ namespace sfm_planner{
 
     void SfmPlanner::set_Position_Orientation_Info(){
         curr_robot_coordinates={robot_pose_.pose.pose.position.x, robot_pose_.pose.pose.position.y}; //non so perchè con i messaggi di odometria non accetta il push_back() per inserirli in un vettore
-        curr_robot_orientation=tf2::getYaw(robot_pose_.pose.pose.orientation);
+        //curr_robot_orientation=tf2::getYaw(robot_pose_.pose.pose.orientation);
+        curr_robot_orientation=angles::normalize_angle(tf2::getYaw(robot_pose_.pose.pose.orientation));
 
         std::cout << "\n";
         std::cout << "**VETTORI COORDINATE GOAL E COORDINATE ROBOT CALCOLATI: " << std::endl;
@@ -153,6 +153,34 @@ namespace sfm_planner{
         std::cout << "\n";
         std::cout << "**VETTORE VELOCITÀ ROBOT ATTUALE: " << std::endl;
         std::cout << "  *Robot velocity vector  : " << curr_robot_lin_vel[0] << " " << curr_robot_lin_vel[1] << std::endl; 
+
+        //ci serve trasformare la velocità dal base_footprint al frame map
+
+        ros::Rate rate(10.0);
+        geometry_msgs::TransformStamped tf_result;
+        try {
+        tf_result = tfBuffer.lookupTransform("map", "locobot/base_footprint", ros::Time(0));
+        } catch (tf2::TransformException& ex) {
+        // TODO: handle lookup failure appropriately
+        }
+
+        
+        tf2::Quaternion q(
+            tf_result.transform.rotation.x,
+            tf_result.transform.rotation.y,
+            tf_result.transform.rotation.z,
+            tf_result.transform.rotation.w
+        );
+        tf2::Vector3 p(0,0,0);
+
+        tf2::Transform transform(q, p);
+        tf2::Vector3 velocity_in_child_frame(curr_robot_lin_vel[0],curr_robot_lin_vel[1],0);
+        tf2::Vector3 velocity_in_target_frame = transform * velocity_in_child_frame;
+        curr_robot_lin_vel={velocity_in_target_frame[0],velocity_in_target_frame[1]};
+
+        std::cout << "VELOCITY NEL BASE LINK FRAME: " << std::endl;
+        std::cout<< velocity_in_target_frame[0] << " " << velocity_in_target_frame[1]<< std::endl;
+        std::cout<< curr_robot_lin_vel[0] << " " << curr_robot_lin_vel[1] << std::endl;
 
         return;
     }
@@ -424,6 +452,8 @@ namespace sfm_planner{
                 // essere calcolata per far ruotare il robot nella posa finale indicata
                 std::cout << "Orientazione non raggiunta" << std::endl;
                 new_robot_ang_vel_z=K_p*(angles::shortest_angular_distance(curr_robot_orientation,goal_orientation));
+
+        
                 }
             
         }
@@ -450,6 +480,8 @@ namespace sfm_planner{
             std::cout << "  *alfa : " << alfa_angle << std::endl; 
             std::cout << "  *beta : " << beta_angle << std::endl;
             std::cout << "\n";
+
+            
             std::cout << "-------- NUOVA VELOCITÀ ROBOT CALCOLATA --------- " << std::endl;
             std::cout << "  *New position : " << new_robot_pos[0] << " " << new_robot_pos[1] << std::endl;
             std::cout << "  *New velocity vector  : " << new_robot_lin_vel[0] << " " << new_robot_lin_vel[1] << std::endl; 
@@ -514,10 +546,10 @@ namespace sfm_planner{
         cmd_vel.angular.x=0.0;
         cmd_vel.angular.y=0.0;
         cmd_vel.angular.z=new_robot_ang_vel_z;
-        // cmd_vel.linear.x=vect_norm1(new_robot_lin_vel);
+        //cmd_vel.linear.x=vect_norm1({velocity_in_target_frame[0],velocity_in_target_frame[1]});
         // cmd_vel.linear.y=0.0;
         cmd_vel.linear.x=std::fabs(velocity_in_target_frame[0]);
-        cmd_vel.linear.y=0.0;
+        cmd_vel.linear.y=velocity_in_target_frame[1];
         cmd_vel.linear.z=0.0;
 
         pub_cmd.publish(cmd_vel);

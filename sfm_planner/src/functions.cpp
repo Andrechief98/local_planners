@@ -34,7 +34,7 @@ std::vector<double> compute_direction(std::vector<double> vec1, std::vector<doub
         std::vector<double> dir={0,0};
         double norm = vect_norm2(vec1, vec2);
 
-        if (norm<0.11) norm=0.1; //se tende a zero allora la forza diventa troppo grande e può causare problemi
+        if (norm<0.01) norm=0.01; //se tende a zero allora la forza diventa troppo grande e può causare problemi
 
         for(int i=0; i<DIMENSION; i++){
             dir[i]=(vec1[i]-vec2[i])/norm;

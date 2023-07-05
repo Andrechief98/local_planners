@@ -136,16 +136,16 @@ private:
     double alfa_angle;
     double beta_angle;
     double theta_angle;
-    double k=0.9;
-    double h=0.5;
-    double gam=0.8;
+    double k=0.63;
+    double h=0.3;
+    double gam=0.2;
 
     double beta;
     
     double K_p=0.8; //costante proporzionale per il calcolo della velocità angolare (proporzionale all'errore);
     double max_lin_acc_x=8;
     double max_angular_vel_z=1.3; //da ricavare dal file config dell'interbotix
-    double desired_vel = 1.3; //valore da ricavare direttamente dal file dell'interbotix
+    double desired_vel = 0.5; //valore da ricavare direttamente dal file dell'interbotix
     double delta_t=0.2;
 
     //SOCIAL FORCE MODEL PARAMETERS
