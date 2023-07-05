@@ -143,7 +143,7 @@ private:
     double beta;
     
     double K_p=0.8; //costante proporzionale per il calcolo della velocità angolare (proporzionale all'errore);
-    double max_lin_acc_x=8;
+    double max_lin_acc_x=2.5;
     double max_angular_vel_z=1.3; //da ricavare dal file config dell'interbotix
     double desired_vel = 0.5; //valore da ricavare direttamente dal file dell'interbotix
     double delta_t=0.2;
