@@ -1,0 +1,10 @@
+mpc_planner:
+  dt: 0.1
+  prediction_horizon: 12
+  control_horizon: 0
+  model_type: "unicycle"
+  q_weights: [10.0, 10.0, 1.0]   # weight for x,y,theta
+  r_weights: [1.0, 0.1]          # weight for v,omega
+  p_weights: [10.0, 10.0, 1.0]   # weight for x,y,theta
+  # max_v: 0.6
+  # max_omega: 1.0

@@ -121,6 +121,9 @@ private:
     double new_robot_ang_vel_z;
     std::vector<double> new_robot_pos;
 
+    //direzione attuale del robot
+    std::vector<double> n_robot={0,0};
+
 
     //ROBOT SOCIAL FORCES
     std::vector<double> e;

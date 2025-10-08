@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>sfm_planner</name>
+  <name>mpc_planner</name>
   <version>0.0.0</version>
-  <description>The local_planner package</description>
+  <description>The mpc_planner package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
@@ -19,7 +19,7 @@
   <!-- Url tags are optional, but multiple are allowed, one per tag -->
   <!-- Optional attribute type can be: website, bugtracker, or repository -->
   <!-- Example: -->
-  <!-- <url type="website">http://wiki.ros.org/local_planner</url> -->
+  <!-- <url type="website">http://wiki.ros.org/mpc_planner</url> -->
 
 
   <!-- Author tags are optional, multiple are allowed, one per tag -->
@@ -49,22 +49,23 @@
   <!-- Use doc_depend for packages you need only for building documentation: -->
   <!--   <doc_depend>doxygen</doc_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>gazebo_msgs</build_depend>
   <build_depend>nav_core</build_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>rospy</build_depend>
   <build_depend>std_msgs</build_depend>
-  <build_depend>gazebo_msgs</build_depend>
+  <build_export_depend>gazebo_msgs</build_export_depend>
   <build_export_depend>nav_core</build_export_depend>
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>rospy</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
-  <build_export_depend>gazebo_msgs</build_export_depend>
+  <exec_depend>gazebo_msgs</exec_depend>
   <exec_depend>nav_core</exec_depend>
   <exec_depend>roscpp</exec_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
-  <exec_depend>gazebo_msgs</exec_depend>
-  
+
+
   <build_depend>angles</build_depend>
   <build_depend>cmake_modules</build_depend>
   <build_depend>gazebo_msgs</build_depend>
@@ -83,12 +84,10 @@
 
 
 
-
   <!-- The export tag contains other, unspecified, tags -->
   <export>
     <!-- Other tools can request additional information be placed here -->
-    <nav_core plugin="${prefix}/sfm_plugin.xml"/>
+    <nav_core plugin="${prefix}/mpc_plugin.xml"/>
 
   </export>
-
 </package>
