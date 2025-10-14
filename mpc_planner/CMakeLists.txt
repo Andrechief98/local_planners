@@ -152,7 +152,7 @@ include_directories(
 # )
 
 #add_library(sfm_planner_lib src/sfm_planner.cpp)
-add_library(mpc_planner_lib src/mpc_planner.cpp)# src/functions.cpp src/classes.cpp)
+add_library(mpc_planner_lib src/mpc_planner.cpp src/classes.cpp)# src/functions.cpp src/classes.cpp)
 add_dependencies(mpc_planner_lib ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(mpc_planner_lib ${catkin_LIBRARIES} ${CASADI_LIBRARY})
 

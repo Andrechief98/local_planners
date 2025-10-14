@@ -1,7 +1,7 @@
 #pragma once
 #include <memory>
 #include <vector>
-
+#include <string>
 #include <ros/ros.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
@@ -14,7 +14,8 @@
 #include <base_local_planner/odometry_helper_ros.h>
 #include <casadi/casadi.hpp>
 
-#include "dynamic_reconfig.h"
+#include <mpc_planner/classes.h>
+
 
 
 namespace mpc_planner {
@@ -42,11 +43,13 @@ public:
     //void setWeights(const Eigen::VectorXd& Q_, const Eigen::VectorXd& R_, const Eigen::VectorXd& P_);               // set cost weights (q: state weights flattened; r: control weights flattened)
     void buildSolver();
     void buildReferenceTrajectory(casadi::DM& p, int Np, double cur_x, double cur_y);
+    void loadParameters();
 
     // Odometry 
     void extractOdometryInfo();
 
-
+    // Object info extraction
+    
     
 
 
@@ -61,8 +64,10 @@ private:
     nav_msgs::Odometry current_odom_;
     
     ros::Subscriber sub_odom;
+    ros::Subscriber sub_obs;
     ros::Publisher pub_cmd;
     ros::Publisher pub_optimal_traj;
+    ros::Publisher pub_ref_posearray;
 
 
     // Global plan information
@@ -77,21 +82,29 @@ private:
     int nu = 2;             // control dim
     int Np = 20;            // prediction horizon
     int Nc = 0;             // control horizon
-    double dt = 0.2;        // Timestep
-    double v_max = 1.0;
-    double v_min = -0.5;
-    double w_max = 2.0;
-    double w_min = -2.0;
+    int N_cost_params = 0;
+    int N_obs = 0;
+    int ref_len = nx*(Np+1);
+    std::string model = "euler";
+    double r_robot = 0.5;
+    double dt = 0.05;        // Timestep
+    double v_max = 0.5;
+    double v_min = -0.2;
+    double w_max = 1.5;
+    double w_min = -1.5;
+    double delta_v_max = 0.1;  // [m/s per step] esempio: variazione massima velocità lineare
+    double delta_w_max = 0.3;  // [rad/s per step] esempio: variazione massima velocità angolare
 
     casadi::Function solver_; // il solver CasADi (nlpsol)
     casadi::DM lbx_full, ubx_full;    // bounds su decision vars
     casadi::DM lbg, ubg;    // bounds su decision vars
     casadi::DM U_previous;       // warm-start (soluzione precedente)
     casadi::DM X_previous;
+    casadi::DM s_previous;
 
-    // Eigen::Vector3d Q;  // state weights
-    // Eigen::Vector2d R;  // control weights
-    // Eigen::Vector3d P;  // final state weights
+    Eigen::Vector3d Q;  // state weights
+    Eigen::Vector2d R;  // control weights
+    Eigen::Vector3d P;  // final state weights
 
 
     // Planner infomation
@@ -101,11 +114,16 @@ private:
     double angle_tolerance=0.13;
     
 
+    // Obstacle information
+    std::vector<Obstacle> obstacles_list;
+    double max_n_obs = 2;
 
     // Callback functions
     void odomCallback(const nav_msgs::Odometry::ConstPtr& msg);
+    void obstacleCallback(const gazebo_msgs::ModelStates::ConstPtr& msg);
 
     };
 
 
 } // namespace mpc_planner
+

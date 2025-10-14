@@ -1,0 +1,20 @@
+<launch>
+  <include file="$(find interbotix_xslocobot_nav)/launch/xslocobot_nav_sim.launch">
+  </include>
+  
+  <include file="$(find interbotix_xslocobot_descriptions)/launch/remote_view.launch">
+  </include>
+
+  <!-- <node pkg="costmap_converter" type="standalone_converter" name="costmap_converter" output="screen">
+    <remap from="/move_base/local_costmap/costmap" to="/locobot/move_base/local_costmap/costmap"/>
+    <param name="output_obstacles_topic" value="/costmap_converter/costmap_obstacles"/>
+    
+    <param name="cluster" value="true"/>
+    <param name="cluster_tolerance" value="0.2"/>
+    <param name="min_cluster_size" value="2"/>
+    <param name="max_cluster_size" value="100"/>
+  </node> -->
+
+  <rosparam command="load" file="$(find mpc_planner)/config/mpc_params.yaml" />
+
+</launch>

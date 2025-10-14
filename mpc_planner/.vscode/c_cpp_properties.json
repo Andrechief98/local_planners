@@ -7,9 +7,9 @@
       },
       "includePath": [
         "/home/andrea/catkin_workspace/devel/include/**",
+        "/home/andrea/catkin_ws/devel/include/**",
         "/home/andrea/ros_packages_aggiuntivi/devel/include/**",
         "/home/andrea/interbotix_ws/devel/include/**",
-        "/home/andrea/catkin_ws/devel/include/**",
         "/home/andrea/create3_ros1_ws/install_isolated/include/**",
         "/opt/ros/noetic/include/**",
         "/home/andrea/catkin_workspace/src/SFM_GT_planner/include/**",
