@@ -11,8 +11,9 @@
 #define TIME_STEP 0.2
 
 
-Obstacle::Obstacle(double x, double y, double radius){
+Obstacle::Obstacle(double x, double y, double radius, int i){
         r=r;
+        index = i;
         pos[0] = x;
         pos[1] = y;
     }

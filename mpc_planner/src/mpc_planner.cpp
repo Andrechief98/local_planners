@@ -51,7 +51,7 @@ namespace mpc_planner {
         cs::MX U = cs::MX::sym("U", nu*Np);
         
         // Slack variables for terminal constraints
-        cs::MX s = cs::MX::sym("s", nx);
+        cs::MX s = cs::MX::sym("s", ns);
 
         // parameters of the optimization problem: 
         //      [x0,y0,th0, reference(3*(N+1)), Qx, Qy, Qth, Rv, Rw, Px, Py, Pth, last_v, last_w, obs_info([x_obs1, y_obs1, r_obs1], [x_obs2, y_obs2, r_obs2]), ...]   
@@ -73,14 +73,10 @@ namespace mpc_planner {
 
         // Cost function
         cs::MX J = cs::MX::zeros(1);
-        auto ref_idx = [&](int k,int i){return nx + nx*k + i; };
 
         for (int k = 0; k < Np; ++k) {
             cs::MX xk = X(cs::Slice(nx*k, nx*(k+1)));
             cs::MX x_r = cs::MX::vertcat(std::vector<cs::MX>{
-                // p(ref_idx(k,0)), 
-                // p(ref_idx(k,1)), 
-                // p(ref_idx(k,2))
                 p(nx + nx*k + 0),
                 p(nx + nx*k + 1),
                 p(nx + nx*k + 2)
@@ -90,30 +86,44 @@ namespace mpc_planner {
 
             cs::MX diff_th = x_r(2) - xk(2);
 
+
             J = J + Qx*(x_r(0) - xk(0))*(x_r(0) - xk(0))
                 + Qy*(x_r(1) - xk(1))*(x_r(1) - xk(1))
                 + Qth*diff_th*diff_th
                 + Rv*vk*vk + Rw*wk*wk;
+
+
+
+            // Obstacle avoidance
+            // for(int j=0; j<N_obs; j++){
+
+            //     cs::MX obstacles_pos = p(cs::Slice(weights_start_idx + N_cost_params + nu + 3*j, weights_start_idx + N_cost_params + nu + 3*j +2));
+
+            //     // std::cout << "Obstacle dimension: " << obstacles_pos.size1() << std::endl;
+            //     cs::MX obstacles_r = p(weights_start_idx + N_cost_params + nu + 3*j + 2);
+            //     cs::MX dist = cs::MX::sqrt(cs::MX::fmax(cs::MX::sumsqr(xk(cs::Slice(0,2)) - obstacles_pos), 1e-12));
+            //     cs::MX delta = cs::MX::fmax(dist, 1e-3);  
+            //     cs::MX obstacle_penalty = 2/ cs::MX::pow(delta, 2);
+
+            //     J = J + obstacle_penalty;
+            // }
         }
 
         // Terminal cost
         cs::MX xN = X(cs::Slice(nx*Np, nx*(Np+1)));
         cs::MX x_rN = cs::MX::vertcat(std::vector<cs::MX>{
-            // p(ref_idx(Np,0)), 
-            // p(ref_idx(Np,1)), 
-            // p(ref_idx(Np,2))
             p(nx + nx*Np + 0),
             p(nx + nx*Np + 1),
             p(nx + nx*Np + 2)
         });
-        double slack_penalty = 50;
+        double slack_penalty = 30;
 
         cs::MX diff_th_N = x_rN(2) - xN(2);
 
-        J = J + Px*(x_rN(0) - xN(0))*(x_rN(0) - xN(0))
-            + Py*(x_rN(1) - xN(1))*(x_rN(1) - xN(1))
-            + Pth*diff_th_N*diff_th_N
-            + slack_penalty*(s(0)*s(0) + s(1)*s(1) + s(2)*s(2));
+        // J = J + Px*(x_rN(0) - xN(0))*(x_rN(0) - xN(0))
+        //     + Py*(x_rN(1) - xN(1))*(x_rN(1) - xN(1))
+        //     + Pth*diff_th_N*diff_th_N
+        //     + slack_penalty*s*s;
 
 
         
@@ -134,7 +144,7 @@ namespace mpc_planner {
         ubg = cs::DM::zeros(nx);
 
 
-        for (int k = 0; k < Np-1; ++k) {
+        for (int k = 0; k < Np; ++k) {
 
             cs::MX dyn;
             cs::MX xk  = X(cs::Slice(nx*k, nx*(k+1)));
@@ -178,6 +188,7 @@ namespace mpc_planner {
                 cs::MX dth4 = wk;
                 cs::MX k4 = cs::MX::vertcat({dx4, dy4, dth4});
 
+
                 // Stato al passo successivo (discretizzazione RK4)
                 cs::MX x_next = xk + (dt/6) * (k1 + 2*k2 + 2*k3 + k4);
                 
@@ -203,10 +214,13 @@ namespace mpc_planner {
                 // std::cout << "Obstacle dimension: " << obstacles_pos.size1() << std::endl;
                 cs::MX obstacles_r = p(weights_start_idx + N_cost_params + nu + 3*j + 2);
 
-                cs::MX obs_constr = (obstacles_r+r_robot)*(obstacles_r+r_robot) - cs::MX::sumsqr(xk1(cs::Slice(0,2)) - obstacles_pos);
+                cs::MX obs_constr = cs::MX::sumsqr(xk1(cs::Slice(0,2)) - obstacles_pos)
+                    - (obstacles_r + r_robot)*(obstacles_r + r_robot);
                 g.push_back(obs_constr);
-                lbg = cs::DM::vertcat({lbg, cs::DM::ones(1)*-1e4});
-                ubg = cs::DM::vertcat({ubg, cs::DM::zeros(1)});   
+                lbg = cs::DM::vertcat({lbg, cs::DM::zeros(1)});     // lower bound 0
+                ubg = cs::DM::vertcat({ubg, cs::DM::ones(1)*1e20}); // upper bound +large
+
+
                 
                 // std::cout << "Obstacle constraint set" << std::endl;
 
@@ -214,22 +228,15 @@ namespace mpc_planner {
         }
 
         // Terminal constraint:
-        g.push_back(x_rN - xN - s);     // 1 slack variable, 3 constraints (one for each element of xN)
-        lbg = cs::DM::vertcat({lbg, cs::DM::ones(nx)*-1e4});       // lb < x_rN - xN - s
-        ubg = cs::DM::vertcat({ubg, cs::DM::zeros(nx)});            // x_rN - xN -s < ub
-
-        g.push_back(-x_rN + xN - s);    // 1 slack variable, 3 constraints (one for each element of xN)
-        lbg = cs::DM::vertcat({lbg, cs::DM::zeros(nx)});             // lb < - x_rN + xN - s 
-        ubg = cs::DM::vertcat({ubg, cs::DM::ones(nx)*1e4});      // - x_rN + xN - s > ub
-
-
+        cs::MX terminal_constr = cs::MX::sumsqr(x_rN(cs::Slice(0,2)) - xN(cs::Slice(0,2))) - s*s;
+        g.push_back(terminal_constr);     // 1 slack variable, 
+        lbg = cs::DM::vertcat({lbg, cs::DM::ones(ns)*-1e-3});       // lb < x_rN - xN - s
+        ubg = cs::DM::vertcat({ubg, cs::DM::zeros(ns)});            // x_rN - xN -s < ub
         
-
 
         // **** CONSTRAINTS ON VARIABLES VALUES*****
         int nX = nx*(Np+1);
         int nU = nu*Np;
-        int ns = 3;
         int n_opt = nX + nU;           // dimensione di opt_vars
 
         // Optimization variables constraints
@@ -237,11 +244,6 @@ namespace mpc_planner {
         ubx_full = cs::DM::ones(n_opt) *  1e20;
 
         // State constraints:
-        for (int i = 0; i < nX; ++i) {
-            lbx_full(i) = -1e20;
-            ubx_full(i) =  1e20;
-        }
-
         for (int i = 0; i < nX; ++i) {
             lbx_full(i) = -1e20;
             ubx_full(i) =  1e20;
@@ -256,8 +258,8 @@ namespace mpc_planner {
         }
 
         // Slack constraints:
-        lbx_full = cs::DM::vertcat({lbx_full, cs::DM::zeros(3)}); // s >= 0
-        ubx_full = cs::DM::vertcat({ubx_full, cs::DM::ones(3)*1e20}); // s non limitato superiormente
+        lbx_full = cs::DM::vertcat({lbx_full, cs::DM::zeros(ns)}); // s >= 0
+        ubx_full = cs::DM::vertcat({ubx_full, cs::DM::ones(ns)*1e20}); // s non limitato superiormente
         
 
         for (int k = 0; k < Np-1; ++k) {
@@ -301,7 +303,7 @@ namespace mpc_planner {
         // Solver setting
         cs::Dict opts;
         opts["ipopt.print_level"] = 0;
-        opts["print_time"] = 1;
+        opts["print_time"] = 0;
         opts["ipopt.tol"] = 1e-3;
         opts["ipopt.max_iter"] = 50;
 
@@ -309,7 +311,7 @@ namespace mpc_planner {
 
         U_previous = cs::DM::zeros(nu*Np);
         X_previous = cs::DM::zeros(nx*(Np+1));
-        s_previous = cs::DM::zeros(nx);
+        s_previous = cs::DM::zeros(ns);
 
         // ROS_INFO("DEBUG sizes: nX=%d, nU=%d, n_opt=%d, ng=%d", nX, nU, n_opt, ng);
 
@@ -404,10 +406,10 @@ namespace mpc_planner {
         
             for (int i = 0; i < P_size; ++i) {
                 double value = 0.0;
-                if (r_list[i].getType() == XmlRpc::XmlRpcValue::TypeDouble)
-                    value = static_cast<double>(r_list[i]);
-                else if (r_list[i].getType() == XmlRpc::XmlRpcValue::TypeInt)
-                    value = static_cast<int>(r_list[i]);
+                if (p_list[i].getType() == XmlRpc::XmlRpcValue::TypeDouble)
+                    value = static_cast<double>(p_list[i]);
+                else if (p_list[i].getType() == XmlRpc::XmlRpcValue::TypeInt)
+                    value = static_cast<int>(p_list[i]);
                 P(i) = value;
             }
             N_cost_params = N_cost_params + P_size;
@@ -442,8 +444,8 @@ namespace mpc_planner {
                     // filtra solo gli oggetti che ti interessano
                     if (name != "room" && name != "ground_plane" && name != "locobot")
                     {   
-                        double radius = 1;
-                        Obstacle new_obstacle(msg->pose[i].position.x, msg->pose[i].position.y, radius);
+                        double radius = 0.25;
+                        Obstacle new_obstacle(msg->pose[i].position.x, msg->pose[i].position.y, radius, i);
                         obstacles_list.push_back(new_obstacle);
                     }
                 }
@@ -452,6 +454,7 @@ namespace mpc_planner {
                 // ricreo il solver con le nuove informazioni sugli ostacoli
                 buildSolver();
                 // std::cout << "Solver built" << std::endl;
+
 
             }
             else{
@@ -463,7 +466,8 @@ namespace mpc_planner {
                 // e le corrispondenti velocità
                 if (!obstacles_list.empty()){
                     for (int i = 0; i < obstacles_list.size(); i++){
-                        obstacles_list[i].updateInfo(msg->pose[i].position.x, msg->pose[i].position.y, dt);
+                        int index = obstacles_list[i].index;
+                        obstacles_list[i].updateInfo(msg->pose[index].position.x, msg->pose[index].position.y, dt);
                     }
                 }
 
@@ -670,7 +674,7 @@ namespace mpc_planner {
 
             cs::DM X_opt = solution(cs::Slice(0, nx*(Np+1)));                // primi nx*(Np+1) valori → stati
             cs::DM U_opt = solution(cs::Slice(nx*(Np+1), nx*(Np+1)+nu*Np));  // restanti nu*Np valori → controlli
-            cs::DM s_opt = solution(cs::Slice(nx*(Np+1) + nu*Np, nx*(Np+1) + nu*Np + nx));    
+            cs::DM s_opt = solution(cs::Slice(nx*(Np+1) + nu*Np, nx*(Np+1) + nu*Np + 1));    
 
             // std::cout << "Dimension of X_opt: " << (int)X_opt.size1() << std::endl;
             // std::cout << "Dimension of U_opt: " << (int)U_opt.size1() << std::endl;

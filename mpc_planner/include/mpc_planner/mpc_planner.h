@@ -80,7 +80,8 @@ private:
     // MPC parameters
     int nx = 3;             // state dim
     int nu = 2;             // control dim
-    int Np = 20;            // prediction horizon
+    int ns = 1;             // slack variable dimension
+    int Np = 40;            // prediction horizon
     int Nc = 0;             // control horizon
     int N_cost_params = 0;
     int N_obs = 0;
@@ -89,11 +90,11 @@ private:
     double r_robot = 0.5;
     double dt = 0.05;        // Timestep
     double v_max = 0.5;
-    double v_min = -0.2;
+    double v_min = 0;
     double w_max = 1.5;
     double w_min = -1.5;
     double delta_v_max = 0.1;  // [m/s per step] esempio: variazione massima velocità lineare
-    double delta_w_max = 0.3;  // [rad/s per step] esempio: variazione massima velocità angolare
+    double delta_w_max = 0.5;  // [rad/s per step] esempio: variazione massima velocità angolare
 
     casadi::Function solver_; // il solver CasADi (nlpsol)
     casadi::DM lbx_full, ubx_full;    // bounds su decision vars

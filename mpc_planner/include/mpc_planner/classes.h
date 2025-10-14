@@ -14,9 +14,10 @@ class Obstacle{
         Eigen::Vector2d vel{0, 0};
         Eigen::Vector3d bounding_box{0,0,0};
         double r = 0;
+        int index;
 
     //constructor
-    Obstacle(double x, double y, double radius);
+    Obstacle(double x, double y, double radius, int i);
 
     
     void updateInfo(double x, double y, double dt);
