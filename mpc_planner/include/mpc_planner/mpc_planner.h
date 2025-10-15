@@ -95,7 +95,7 @@ private:
     double w_max = 1.5;
     double w_min = -1.5;
     double delta_v_max = 0.1;  // [m/s per step] esempio: variazione massima velocità lineare
-    double delta_w_max = 0.5;  // [rad/s per step] esempio: variazione massima velocità angolare
+    double delta_w_max = 0.3;  // [rad/s per step] esempio: variazione massima velocità angolare
 
     casadi::Function solver_; // il solver CasADi (nlpsol)
     casadi::DM lbx_full, ubx_full;    // bounds su decision vars

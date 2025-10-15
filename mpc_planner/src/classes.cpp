@@ -16,7 +16,7 @@ void Obstacle::updateInfo(double x, double y, ros::Time current_time){
     Eigen::Vector2d new_pos{x, y};
     delta_t = std::max(1e-4,(current_time - previous_time).toSec());
     // std::cout << "delta_t: " << (current_time - previous_time).toSec() << std::endl;
-    vel = vel + (new_pos-pos)/delta_t; 
+    vel = (new_pos-pos)/delta_t; 
     pos = new_pos;
     previous_time = current_time;
     
