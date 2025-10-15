@@ -4,23 +4,21 @@
 #include <cstdlib>
 #include <gazebo_msgs/ModelStates.h>
 
-
-#define DIMENSION 2 //dimensione del problema (due dimensioni, x e y)
-#define DES_VEL 0.9312//valore di desired velocity (stesso valore sia per Vx che Vy)
-#define LAMBDA 0.9928  //valore di lambda del SFM (articolo della prof)
-#define TIME_STEP 0.2
-
-
-Obstacle::Obstacle(double x, double y, double radius, int i){
-        r=r;
+Obstacle::Obstacle(double x, double y, double radius, int i, ros::Time current_time){
+        r=radius;
         index = i;
-        pos[0] = x;
-        pos[1] = y;
+        pos(0) = x;
+        pos(1) = y;
+        previous_time = current_time;
     }
 
-void Obstacle::updateInfo(double x, double y, double dt){
-    vel = vel + (Eigen::Vector2d(x, y)-pos)/dt; 
-    pos = Eigen::Vector2d(x, y);
+void Obstacle::updateInfo(double x, double y, ros::Time current_time){
+    Eigen::Vector2d new_pos{x, y};
+    delta_t = std::max(1e-4,(current_time - previous_time).toSec());
+    // std::cout << "delta_t: " << (current_time - previous_time).toSec() << std::endl;
+    vel = vel + (new_pos-pos)/delta_t; 
+    pos = new_pos;
+    previous_time = current_time;
     
 }
 

@@ -15,12 +15,14 @@ class Obstacle{
         Eigen::Vector3d bounding_box{0,0,0};
         double r = 0;
         int index;
+        double delta_t=0;
+        ros::Time previous_time;
 
     //constructor
-    Obstacle(double x, double y, double radius, int i);
+    Obstacle(double x, double y, double radius, int i, ros::Time current_time);
 
     
-    void updateInfo(double x, double y, double dt);
+    void updateInfo(double x, double y, ros::Time current_time);
 };
 
 

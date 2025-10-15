@@ -54,8 +54,8 @@ namespace mpc_planner {
         cs::MX s = cs::MX::sym("s", ns);
 
         // parameters of the optimization problem: 
-        //      [x0,y0,th0, reference(3*(N+1)), Qx, Qy, Qth, Rv, Rw, Px, Py, Pth, last_v, last_w, obs_info([x_obs1, y_obs1, r_obs1], [x_obs2, y_obs2, r_obs2]), ...]   
-        cs::MX p = cs::MX::sym("p", nx + nx*(Np+1) + N_cost_params + nu + N_obs*3, 1);        
+        //      [x0,y0,th0, reference(3*(N+1)), Qx, Qy, Qth, Rv, Rw, Px, Py, Pth, last_v, last_w, obs_info([x_obs1, y_obs1, vx_obs1, vy_obs1, r_obs1], [x_obs2, y_obs2, vx_obs2, vy_obs2, r_obs2]), ...]   
+        cs::MX p = cs::MX::sym("p", nx + nx*(Np+1) + N_cost_params + nu + N_obs*N_obs_info, 1);        
 
         // Helper: indice del blocco pesi dentro p
         int weights_start_idx = nx + nx*(Np+1);
@@ -208,13 +208,22 @@ namespace mpc_planner {
 
             // Obstacle avoidance
             for(int j=0; j<N_obs; j++){
+                
+                // Current obstacle position
+                cs::MX obstacles_pos = p(cs::Slice(weights_start_idx + N_cost_params + nu + N_obs_info*j, weights_start_idx + N_cost_params + nu + N_obs_info*j +2));
+                
+                // Current obstacle velocity
+                cs::MX obstacles_vel = p(cs::Slice(weights_start_idx + N_cost_params + nu + N_obs_info*j+2, weights_start_idx + N_cost_params + nu + N_obs_info*j +4));
 
-                cs::MX obstacles_pos = p(cs::Slice(weights_start_idx + N_cost_params + nu + 3*j, weights_start_idx + N_cost_params + nu + 3*j +2));
-
+                // Obstacle radius
+                cs::MX obstacles_r = p(weights_start_idx + N_cost_params + nu + N_obs_info*j + 4);
+                
+                // Future obstacle position
+                cs::MX fut_obstacles_pos = obstacles_pos + (k+1)*dt*obstacles_vel;
                 // std::cout << "Obstacle dimension: " << obstacles_pos.size1() << std::endl;
-                cs::MX obstacles_r = p(weights_start_idx + N_cost_params + nu + 3*j + 2);
+           
 
-                cs::MX obs_constr = cs::MX::sumsqr(xk1(cs::Slice(0,2)) - obstacles_pos)
+                cs::MX obs_constr = cs::MX::sumsqr(xk1(cs::Slice(0,2)) - fut_obstacles_pos)
                     - (obstacles_r + r_robot)*(obstacles_r + r_robot);
                 g.push_back(obs_constr);
                 lbg = cs::DM::vertcat({lbg, cs::DM::zeros(1)});     // lower bound 0
@@ -262,15 +271,15 @@ namespace mpc_planner {
         ubx_full = cs::DM::vertcat({ubx_full, cs::DM::ones(ns)*1e20}); // s non limitato superiormente
         
 
-        for (int k = 0; k < Np-1; ++k) {
+        for (int k = 0; k < Np; ++k) {
             cs::MX vk  = U(2*k + 0);
             cs::MX wk  = U(2*k + 1);
 
             if (k == 0) {
 
                 // Extraction of the previous inputs
-                cs::MX v_prev = p(weights_start_idx + 8);  // aggiungi u_prev a p 
-                cs::MX w_prev = p(weights_start_idx + 9);
+                cs::MX v_prev = p(weights_start_idx + N_cost_params + 0);  // aggiungi u_prev a p 
+                cs::MX w_prev = p(weights_start_idx + N_cost_params + 1);
 
                 g.push_back(vk - v_prev);
                 lbg = cs::DM::vertcat({lbg, -delta_v_max});
@@ -304,7 +313,7 @@ namespace mpc_planner {
         cs::Dict opts;
         opts["ipopt.print_level"] = 0;
         opts["print_time"] = 0;
-        opts["ipopt.tol"] = 1e-3;
+        opts["ipopt.tol"] = 1e-4;
         opts["ipopt.max_iter"] = 50;
 
         solver_ = nlpsol("solver", "ipopt", nlp, opts);
@@ -332,6 +341,7 @@ namespace mpc_planner {
             loadParameters();
             
             buildSolver();
+            
 
             initialized_ = true;
             ROS_INFO("MPC local planner initialized");
@@ -445,7 +455,12 @@ namespace mpc_planner {
                     if (name != "room" && name != "ground_plane" && name != "locobot")
                     {   
                         double radius = 0.25;
-                        Obstacle new_obstacle(msg->pose[i].position.x, msg->pose[i].position.y, radius, i);
+
+
+                        // STARE ATTENTI AL FATTO CHE ros::Time::now() FORNISCE IL TIME DATO DAL CLOCK O DEL PC NEL CASO 
+                        // DI ROBOT REALE (usare "use_sim_real == "false"") O DELLA SIMULAZIONE GAZEBO (usare "use_sim_real == "true"")
+                        ros::Time time = ros::Time::now();
+                        Obstacle new_obstacle(msg->pose[i].position.x, msg->pose[i].position.y, radius, i, time);
                         obstacles_list.push_back(new_obstacle);
                     }
                 }
@@ -467,7 +482,11 @@ namespace mpc_planner {
                 if (!obstacles_list.empty()){
                     for (int i = 0; i < obstacles_list.size(); i++){
                         int index = obstacles_list[i].index;
-                        obstacles_list[i].updateInfo(msg->pose[index].position.x, msg->pose[index].position.y, dt);
+                        ros::Time time = ros::Time::now();
+                        obstacles_list[i].updateInfo(msg->pose[index].position.x, msg->pose[index].position.y, time);
+
+                        // std::cout << "Velocity of the obstacle: " << obstacles_list[i].pos(0) << "  " << obstacles_list[i].pos(1)  << std::endl;
+                        // std::cout << "Velocity of the obstacle: " << obstacles_list[i].vel(0) << "  " << obstacles_list[i].vel(1)  << std::endl;
                     }
                 }
 
@@ -583,12 +602,15 @@ namespace mpc_planner {
         if(dist_from_goal.norm() <= distance_tolerance){
             std::cout << "------------- Distanza raggiunta ----------------" << std::endl;
             Eigen::Vector2d u_opt(0,0);
+            cmd_vel.linear.x = u_opt(0);
+            cmd_vel.angular.z = u_opt(1);
+            pub_cmd.publish(cmd_vel);
             goal_reached_=true;
         }
         else{
             std::cout << "------------- Distanza non raggiunta ----------------" << std::endl;
 
-            cs::DM p = cs::DM::zeros(nx + nx*(Np+1) + N_cost_params + nu + N_obs*3, 1);
+            cs::DM p = cs::DM::zeros(nx + nx*(Np+1) + N_cost_params + nu + N_obs*N_obs_info, 1);
             p(0) = x;
             p(1) = y; 
             p(2) = theta;
@@ -621,10 +643,17 @@ namespace mpc_planner {
             try
             {            
                 if (N_obs != 0){
+                    std::cout << "Dimension of obstacle_list: " << obstacles_list.size() << std::endl;
                     for (int i=0; i<N_obs; i++){
-                        p(weights_start_idx + N_cost_params + nu + 3*i +0) = obstacles_list[i].pos[0];
-                        p(weights_start_idx + N_cost_params + nu + 3*i +1) = obstacles_list[i].pos[1];
-                        p(weights_start_idx + N_cost_params + nu + 3*i +2) = obstacles_list[i].r;
+                        p(weights_start_idx + N_cost_params + nu + N_obs_info*i +0) = obstacles_list[i].pos(0);
+                        p(weights_start_idx + N_cost_params + nu + N_obs_info*i +1) = obstacles_list[i].pos(1);
+                        p(weights_start_idx + N_cost_params + nu + N_obs_info*i +2) = obstacles_list[i].vel(0);
+                        p(weights_start_idx + N_cost_params + nu + N_obs_info*i +3) = obstacles_list[i].vel(1);
+                        p(weights_start_idx + N_cost_params + nu + N_obs_info*i +4) = obstacles_list[i].r;
+
+                        std::cout << "Position of the obstacle: " << obstacles_list[i].pos(0) << "  " << obstacles_list[i].pos(1)  << std::endl;
+                        std::cout << "Velocity of the obstacle: " << obstacles_list[i].vel(0) << "  " << obstacles_list[i].vel(1)  << std::endl;
+                        std::cout << "Radius of the obstacle: " << obstacles_list[i].r << std::endl;
                     }
                 }
                 std::cout << "obstacle inserted" << std::endl;
@@ -807,9 +836,9 @@ namespace mpc_planner {
                 double dy = global_plan_[traj_idx+1].pose.position.y - y_ref;
                 double theta_ref = std::atan2(dy, dx);
 
-                p_(3 + 3*k + 0) = x_ref;
-                p_(3 + 3*k + 1) = y_ref;
-                p_(3 + 3*k + 2) = theta_ref;
+                p_(nx + nx*k + 0) = x_ref;
+                p_(nx + nx*k + 1) = y_ref;
+                p_(nx + nx*k + 2) = theta_ref;
 
                 geometry_msgs::Pose pose;
                 pose.position.x = x_ref;
@@ -822,9 +851,9 @@ namespace mpc_planner {
                 ref_pose_array.poses.push_back(pose);
             }
             else {
-                p_(3 + 3*k + 0) = goal_pos[0];
-                p_(3 + 3*k + 1) = goal_pos[1];
-                p_(3 + 3*k + 2) = goal_orient;
+                p_(nx + nx*k + 0) = goal_pos[0];
+                p_(nx + nx*k + 1) = goal_pos[1];
+                p_(nx + nx*k + 2) = goal_orient;
 
                 geometry_msgs::Pose pose;
                 pose.position.x = goal_pos[0];

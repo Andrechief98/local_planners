@@ -85,6 +85,7 @@ private:
     int Nc = 0;             // control horizon
     int N_cost_params = 0;
     int N_obs = 0;
+    int N_obs_info = 5;
     int ref_len = nx*(Np+1);
     std::string model = "euler";
     double r_robot = 0.5;
