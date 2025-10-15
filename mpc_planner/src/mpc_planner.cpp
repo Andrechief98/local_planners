@@ -53,6 +53,10 @@ namespace mpc_planner {
         // Slack variables for terminal constraints
         cs::MX s = cs::MX::sym("s", ns);
 
+        // Slack variables for obstacle avoidance
+        int ns_obs = Np * N_obs;
+        cs::MX s_obs = cs::MX::sym("s_obs", ns_obs);
+
         // parameters of the optimization problem: 
         //      [x0,y0,th0, reference(3*(N+1)), Qx, Qy, Qth, Rv, Rw, Px, Py, Pth, last_v, last_w, obs_info([x_obs1, y_obs1, vx_obs1, vy_obs1, r_obs1], [x_obs2, y_obs2, vx_obs2, vy_obs2, r_obs2]), ...]   
         cs::MX p = cs::MX::sym("p", nx + nx*(Np+1) + N_cost_params + nu + N_obs*N_obs_info, 1);        
@@ -85,7 +89,9 @@ namespace mpc_planner {
             cs::MX wk = U(2*k + 1);
 
             cs::MX diff_th = x_r(2) - xk(2);
-
+            // cs::MX raw = x_r(2) - xk(2);
+            // cs::MX diff_th = cs::MX::atan2(cs::MX::sin(raw), cs::MX::cos(raw)); // wrapped difference
+            // J = J + Qth * diff_th * diff_th;
 
             J = J + Qx*(x_r(0) - xk(0))*(x_r(0) - xk(0))
                 + Qy*(x_r(1) - xk(1))*(x_r(1) - xk(1))
@@ -116,14 +122,22 @@ namespace mpc_planner {
             p(nx + nx*Np + 1),
             p(nx + nx*Np + 2)
         });
-        double slack_penalty = 30;
+        double terminal_slack_penalty = 30;
 
         cs::MX diff_th_N = x_rN(2) - xN(2);
 
-        // J = J + Px*(x_rN(0) - xN(0))*(x_rN(0) - xN(0))
-        //     + Py*(x_rN(1) - xN(1))*(x_rN(1) - xN(1))
-        //     + Pth*diff_th_N*diff_th_N
-        //     + slack_penalty*s*s;
+        J = J + Px*(x_rN(0) - xN(0))*(x_rN(0) - xN(0))
+            + Py*(x_rN(1) - xN(1))*(x_rN(1) - xN(1))
+            + Pth*diff_th_N*diff_th_N
+            + terminal_slack_penalty*s*s;
+
+        
+        // Cost for obstacle slack variables
+        double slack_penalty = 50;
+        for (int idx = 0; idx < ns_obs; ++idx) {
+            cs::MX s_i = s_obs(idx);
+            J = J + slack_penalty * s_i * s_i;
+        }
 
 
         
@@ -225,7 +239,16 @@ namespace mpc_planner {
 
                 cs::MX obs_constr = cs::MX::sumsqr(xk1(cs::Slice(0,2)) - fut_obstacles_pos)
                     - (obstacles_r + r_robot)*(obstacles_r + r_robot);
-                g.push_back(obs_constr);
+                // g.push_back(obs_constr);
+                // lbg = cs::DM::vertcat({lbg, cs::DM::zeros(1)});     // lower bound 0
+                // ubg = cs::DM::vertcat({ubg, cs::DM::ones(1)*1e20}); // upper bound +large
+
+                    // index of the slack for (k,j)
+                int slack_index = j* N_obs + k; 
+                cs::MX s_obs_kj = s_obs(slack_index);
+
+                // soft constraint: obs_constr + s_obs_kj >= 0  <=>  lower bound 0
+                g.push_back(obs_constr + s_obs_kj);
                 lbg = cs::DM::vertcat({lbg, cs::DM::zeros(1)});     // lower bound 0
                 ubg = cs::DM::vertcat({ubg, cs::DM::ones(1)*1e20}); // upper bound +large
 
@@ -269,6 +292,10 @@ namespace mpc_planner {
         // Slack constraints:
         lbx_full = cs::DM::vertcat({lbx_full, cs::DM::zeros(ns)}); // s >= 0
         ubx_full = cs::DM::vertcat({ubx_full, cs::DM::ones(ns)*1e20}); // s non limitato superiormente
+
+        // Add obstacle slack bounds: s_obs >= 0
+        lbx_full = cs::DM::vertcat({lbx_full, cs::DM::zeros(ns_obs)});
+        ubx_full = cs::DM::vertcat({ubx_full, cs::DM::ones(ns_obs)*1e20});
         
 
         for (int k = 0; k < Np; ++k) {
@@ -304,7 +331,9 @@ namespace mpc_planner {
         }
 
         // Variabili decisionali totali = X + U + s
-        cs::MX opt_vars = cs::MX::vertcat(std::vector<cs::MX>{X,U,s});
+        // cs::MX opt_vars = cs::MX::vertcat(std::vector<cs::MX>{X,U,s});
+        cs::MX opt_vars = cs::MX::vertcat(std::vector<cs::MX>{X, U, s, s_obs});
+
 
         // NLP
         std::map<std::string, cs::MX> nlp = { {"x", opt_vars}, {"f", J}, {"g", cs::MX::vertcat(g)}, {"p", p} };
@@ -321,6 +350,8 @@ namespace mpc_planner {
         U_previous = cs::DM::zeros(nu*Np);
         X_previous = cs::DM::zeros(nx*(Np+1));
         s_previous = cs::DM::zeros(ns);
+        s_obs_previous = cs::DM::zeros(ns_obs);
+
 
         // ROS_INFO("DEBUG sizes: nX=%d, nU=%d, n_opt=%d, ng=%d", nX, nU, n_opt, ng);
 
@@ -666,7 +697,8 @@ namespace mpc_planner {
 
 
             // prepara arg e chiama solver (warm-start se vuoi)
-            cs::DM x0 = cs::DM::vertcat(std::vector<cs::DM>{X_previous, U_previous, s_previous});
+            // cs::DM x0 = cs::DM::vertcat(std::vector<cs::DM>{X_previous, U_previous, s_previous});
+            cs::DM x0 = cs::DM::vertcat(std::vector<cs::DM>{X_previous, U_previous, s_previous, s_obs_previous});
             std::map<std::string, cs::DM> arg;
             arg["x0"] = x0;
             arg["lbx"] = lbx_full;

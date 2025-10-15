@@ -103,6 +103,7 @@ private:
     casadi::DM U_previous;       // warm-start (soluzione precedente)
     casadi::DM X_previous;
     casadi::DM s_previous;
+    casadi::DM s_obs_previous;
 
     Eigen::Vector3d Q;  // state weights
     Eigen::Vector2d R;  // control weights
