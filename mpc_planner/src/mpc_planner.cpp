@@ -22,6 +22,7 @@
 #include <yaml-cpp/yaml.h>
 #include <gazebo_msgs/ModelStates.h>
 #include <mpc_planner/classes.h>
+#include "mpc_planner/mpcParameters.h"
 
 
 
@@ -58,7 +59,7 @@ namespace mpc_planner {
         cs::MX s_obs = cs::MX::sym("s_obs", ns_obs);
 
         // parameters of the optimization problem: 
-        //      [x0,y0,th0, reference(3*(N+1)), Qx, Qy, Qth, Rv, Rw, Px, Py, Pth, last_v, last_w, obs_info([x_obs1, y_obs1, vx_obs1, vy_obs1, r_obs1], [x_obs2, y_obs2, vx_obs2, vy_obs2, r_obs2]), ...]   
+        //      [x0,y0,th0, reference(3*(N+1)), Qx, Qy, Qth, Rv, Rw, Px, Py, Pth, alfa, beta, last_v, last_w, obs_info([x_obs1, y_obs1, vx_obs1, vy_obs1, r_obs1], [x_obs2, y_obs2, vx_obs2, vy_obs2, r_obs2]), ...]   
         cs::MX p = cs::MX::sym("p", nx + nx*(Np+1) + N_cost_params + nu + N_obs*N_obs_info, 1);        
 
         // Helper: indice del blocco pesi dentro p
@@ -73,6 +74,8 @@ namespace mpc_planner {
         cs::MX Px = p(weights_start_idx + 5);
         cs::MX Py = p(weights_start_idx + 6);
         cs::MX Pth = p(weights_start_idx + 7);
+        cs::MX alfa = p(weights_start_idx + 8);
+        cs::MX beta = p(weights_start_idx + 9);
           
 
         // Cost function
@@ -113,6 +116,31 @@ namespace mpc_planner {
 
             //     J = J + obstacle_penalty;
             // }
+
+            // Obstacle avoidance
+            for(int j=0; j<N_obs; j++){
+                
+                // Current obstacle position
+                cs::MX obstacles_pos = p(cs::Slice(weights_start_idx + N_cost_params + nu + N_obs_info*j, weights_start_idx + N_cost_params + nu + N_obs_info*j +2));
+                
+                // Current obstacle velocity
+                cs::MX obstacles_vel = p(cs::Slice(weights_start_idx + N_cost_params + nu + N_obs_info*j+2, weights_start_idx + N_cost_params + nu + N_obs_info*j +4));
+
+                // Future obstacle position
+                cs::MX fut_obstacles_pos = obstacles_pos + k*dt*obstacles_vel;
+                // std::cout << "Obstacle dimension: " << obstacles_pos.size1() << std::endl;
+
+
+                cs::MX diff = xk(cs::Slice(0,2)) - fut_obstacles_pos;
+                cs::MX distance = cs::MX::sqrt(cs::MX::sum1(diff*diff));
+
+                cs::MX obstacle_penalty = -alfa*cs::MX::log(beta*distance);
+
+
+                J = J + obstacle_penalty;
+
+                
+            }
         }
 
         // Terminal cost
@@ -163,8 +191,8 @@ namespace mpc_planner {
             cs::MX dyn;
             cs::MX xk  = X(cs::Slice(nx*k, nx*(k+1)));
             cs::MX xk1 = X(cs::Slice(nx*(k+1), nx*(k+2)));
-            cs::MX vk  = U(2*k + 0);
-            cs::MX wk  = U(2*k + 1);
+            cs::MX vk  = U(nu*k + 0);
+            cs::MX wk  = U(nu*k + 1);
 
 
             if (model=="euler"){
@@ -243,8 +271,8 @@ namespace mpc_planner {
                 // lbg = cs::DM::vertcat({lbg, cs::DM::zeros(1)});     // lower bound 0
                 // ubg = cs::DM::vertcat({ubg, cs::DM::ones(1)*1e20}); // upper bound +large
 
-                    // index of the slack for (k,j)
-                int slack_index = j* N_obs + k; 
+                // index of the slack for (k,j)
+                int slack_index = k*N_obs + j; 
                 cs::MX s_obs_kj = s_obs(slack_index);
 
                 // soft constraint: obs_constr + s_obs_kj >= 0  <=>  lower bound 0
@@ -283,10 +311,10 @@ namespace mpc_planner {
 
         // Input constraints:
         for (int k = 0; k < Np; ++k) {
-            lbx_full(nX + 2*k + 0) = v_min;
-            ubx_full(nX + 2*k + 0) = v_max;
-            lbx_full(nX + 2*k + 1) = w_min;
-            ubx_full(nX + 2*k + 1) = w_max;
+            lbx_full(nX + nu*k + 0) = cs::DM::ones(1)*v_min;
+            ubx_full(nX + nu*k + 0) = cs::DM::ones(1)*v_max;
+            lbx_full(nX + nu*k + 1) = cs::DM::ones(1)*w_min;
+            ubx_full(nX + nu*k + 1) = cs::DM::ones(1)*w_max;
         }
 
         // Slack constraints:
@@ -299,8 +327,8 @@ namespace mpc_planner {
         
 
         for (int k = 0; k < Np; ++k) {
-            cs::MX vk  = U(2*k + 0);
-            cs::MX wk  = U(2*k + 1);
+            cs::MX vk  = U(nu*k + 0);
+            cs::MX wk  = U(nu*k + 1);
 
             if (k == 0) {
 
@@ -317,8 +345,8 @@ namespace mpc_planner {
                 ubg = cs::DM::vertcat({ubg, delta_w_max});
             } else {
                 // Passi successivi: vincolo tra input consecutivi
-                cs::MX v_prev = U(2*(k-1) + 0);
-                cs::MX w_prev = U(2*(k-1) + 1);
+                cs::MX v_prev = U(nu*(k-1) + 0);
+                cs::MX w_prev = U(nu*(k-1) + 1);
 
                 g.push_back(vk - v_prev);
                 lbg = cs::DM::vertcat({lbg, -delta_v_max});
@@ -365,6 +393,7 @@ namespace mpc_planner {
 
             sub_odom = nh_.subscribe<nav_msgs::Odometry>("/locobot/odom", 1, &MpcPlanner::odomCallback, this);
             sub_obs = nh_.subscribe<gazebo_msgs::ModelStates>("/gazebo/model_states", 1, &MpcPlanner::obstacleCallback, this);
+            sub_mpc_params = nh_.subscribe<mpcParameters>("/mpc/params",1, &MpcPlanner::paramsCallback, this);
             pub_cmd = nh_.advertise<geometry_msgs::Twist>("/locobot/cmd_vel", 1);
             pub_optimal_traj = nh_.advertise<nav_msgs::Path>("/locobot/move_base/TrajectoryPlannerROS/local_plan", 1);
             pub_ref_posearray = nh_.advertise<geometry_msgs::PoseArray>("/pose_array",1);
@@ -384,7 +413,7 @@ namespace mpc_planner {
 
     void MpcPlanner::loadParameters(){
         N_cost_params = 0;
-        XmlRpc::XmlRpcValue q_list, r_list, p_list;
+        XmlRpc::XmlRpcValue q_list, r_list, p_list, alfa_list, beta_list;
 
         if (nh_.getParam("/mpc_planner/Q_weights", q_list)) {
             int Q_size = q_list.size();
@@ -460,6 +489,56 @@ namespace mpc_planner {
             ROS_ERROR("Error loading P matrix weights");
         }
 
+
+        if (nh_.getParam("/mpc_planner/alfa", alfa_list)) {
+            double value = 0.0;
+            if (alfa_list.getType() == XmlRpc::XmlRpcValue::TypeDouble)
+                value = static_cast<double>(alfa_list);
+            else if (alfa_list.getType() == XmlRpc::XmlRpcValue::TypeInt)
+                value = static_cast<int>(alfa_list);
+
+            alfa = value;
+            N_cost_params = N_cost_params + 1;
+            ROS_INFO("alfa loaded");
+        }
+        else{
+            ROS_ERROR("Error loading alfa weight");
+        }
+
+
+        if (nh_.getParam("/mpc_planner/beta", beta_list)) {
+            double value = 0.0;
+            if (beta_list.getType() == XmlRpc::XmlRpcValue::TypeDouble)
+                value = static_cast<double>(beta_list);
+            else if (beta_list.getType() == XmlRpc::XmlRpcValue::TypeInt)
+                value = static_cast<int>(beta_list);
+
+            beta = value;
+            N_cost_params = N_cost_params + 1;
+            ROS_INFO("beta loaded");
+        }
+        else{
+            ROS_ERROR("Error loading beta weight");
+        }
+
+        std::cout << "Number of parameters: " << N_cost_params << std::endl;
+
+    }
+
+    void MpcPlanner::paramsCallback(const mpcParameters::ConstPtr& msg){
+        Q[0] = msg->Q[0];
+        Q[1] = msg->Q[1];
+        Q[2] = msg->Q[2];
+
+        R[0] = msg->R[0];
+        R[1] = msg->R[1];
+        
+        P[0] = msg->P[0];
+        P[1] = msg->P[1];
+        P[2] = msg->P[2];
+
+        alfa = msg->alfa;
+        beta = msg->beta;
     }
 
 
@@ -499,7 +578,8 @@ namespace mpc_planner {
                 
                 // ricreo il solver con le nuove informazioni sugli ostacoli
                 buildSolver();
-                // std::cout << "Solver built" << std::endl;
+                std::cout << "Solver built again" << std::endl;
+                std::cout << "Number of obstacles: " << N_obs << std::endl;
 
 
             }
@@ -656,6 +736,8 @@ namespace mpc_planner {
             double Px = P(0);
             double Py = P(1);
             double Pth = P(2);
+            double alfa_obs = alfa;
+            double beta_obs = beta;
 
             int weights_start_idx = nx + nx*(Np+1);
             
@@ -667,9 +749,11 @@ namespace mpc_planner {
             p(weights_start_idx + 5) = Px;
             p(weights_start_idx + 6) = Py;
             p(weights_start_idx + 7) = Pth;
+            p(weights_start_idx + 8) = alfa_obs;
+            p(weights_start_idx + 9) = beta_obs;
 
-            p(weights_start_idx + 8) = v;
-            p(weights_start_idx + 9) = w;
+            p(weights_start_idx + N_cost_params + 0) = v;
+            p(weights_start_idx + N_cost_params + 1) = w;
             
             try
             {            
@@ -723,13 +807,13 @@ namespace mpc_planner {
                 return false;
             }
 
-            // auto stats = solver_.stats();
-            // std::string status = static_cast<std::string>(stats["return_status"]);
-            // if (status == "Solve_Succeeded" || status == "Feasible_Point_Found") {
-            //     std::cout << "✅ Solver ha trovato una soluzione ammissibile.\n";
-            // } else {
-            //     std::cout << "❌ Solver non ha trovato una soluzione feasible. Stato: " << status << "\n";
-            // }
+            auto stats = solver_.stats();
+            std::string status = static_cast<std::string>(stats["return_status"]);
+            if (status == "Solve_Succeeded" || status == "Feasible_Point_Found") {
+                std::cout << "✅ Solver ha trovato una soluzione ammissibile.\n";
+            } else {
+                std::cout << "❌ Solver non ha trovato una soluzione feasible. Stato: " << status << "\n";
+            }
 
             // std::cout << "Dimension of solution: " << (int)solution.size1() << std::endl;
 
@@ -857,7 +941,7 @@ namespace mpc_planner {
         // Copia Np punti a partire dal closest_idx
         geometry_msgs::PoseArray ref_pose_array;
         for (int k = 0; k < Np_+1; ++k) {
-            int traj_idx = closest_idx + k;
+            int traj_idx = closest_idx + 2*k;
 
             if (traj_idx < global_plan_.size() - 1) {
                 // punto normale (non ultimo)

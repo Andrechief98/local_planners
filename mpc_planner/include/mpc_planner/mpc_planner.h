@@ -13,7 +13,7 @@
 #include <Eigen/Dense>
 #include <base_local_planner/odometry_helper_ros.h>
 #include <casadi/casadi.hpp>
-
+#include "mpc_planner/mpcParameters.h"
 #include <mpc_planner/classes.h>
 
 
@@ -65,6 +65,7 @@ private:
     
     ros::Subscriber sub_odom;
     ros::Subscriber sub_obs;
+    ros::Subscriber sub_mpc_params;
     ros::Publisher pub_cmd;
     ros::Publisher pub_optimal_traj;
     ros::Publisher pub_ref_posearray;
@@ -94,7 +95,7 @@ private:
     double v_min = 0;
     double w_max = 1.5;
     double w_min = -1.5;
-    double delta_v_max = 0.1;  // [m/s per step] esempio: variazione massima velocità lineare
+    double delta_v_max = 0.5;  // [m/s per step] esempio: variazione massima velocità lineare
     double delta_w_max = 0.3;  // [rad/s per step] esempio: variazione massima velocità angolare
 
     casadi::Function solver_; // il solver CasADi (nlpsol)
@@ -108,6 +109,8 @@ private:
     Eigen::Vector3d Q;  // state weights
     Eigen::Vector2d R;  // control weights
     Eigen::Vector3d P;  // final state weights
+    double alfa;        
+    double beta;
 
 
     // Planner infomation
@@ -124,6 +127,7 @@ private:
     // Callback functions
     void odomCallback(const nav_msgs::Odometry::ConstPtr& msg);
     void obstacleCallback(const gazebo_msgs::ModelStates::ConstPtr& msg);
+    void paramsCallback(const mpcParameters::ConstPtr& msg);
 
     };
 
